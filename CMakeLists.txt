@@ -14,5 +14,5 @@ add_executable(musigrid
 add_subdirectory(libtcod/src)
 
 set_target_properties(musigrid PROPERTIES CXX_STANDARD 11 CXX_EXTENSIONS OFF)
-target_link_libraries(musigrid PRIVATE  LIBTCOD::LIBTCOD SDL2::SDL2 ${SFML_LIBRARIES})
+target_link_libraries(musigrid PRIVATE  LIBTCOD::LIBTCOD SDL2::SDL2 ${SFML_LIBRARIES} ${CMAKE_DL_LIBS})
 target_include_directories(musigrid PRIVATE  ${SFML_INCLUDE_DIRS})

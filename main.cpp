@@ -9,18 +9,99 @@
 
 #include "libtcod/src/libtcod.hpp"
 
+#include "libtcod/src/libtcod/color.hpp"
+#include "libtcod/src/libtcod/console_printing.h"
+#include "libtcod/src/libtcod/console_types.h"
 #include "machine.hpp"
 
 #define GRID_W 80
 #define GRID_H 20
 
 struct Point {
-  int x, y;
+  int x{0}, y{0};
 };
 
 #define ALPHABET "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ*#:%!?;=$."
 static Point cursor = {GRID_W / 2, GRID_H / 2};
 static char cursor_char = sizeof(ALPHABET) - 1;
+static struct {
+  bool is_open = false;
+  bool ucase = false;
+  Point pos;
+  Point cursor;
+
+  const std::array<std::array<char, 10>, 5> items{
+      {{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'},
+       {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'},
+       {'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'},
+       {'U', 'V', 'W', 'X', 'Y', 'Z', '*', '#', ':', '%'},
+       {'!', '?', ';', '=', '$', '.', '.', '.', '.', '.'}}};
+
+  int items_cols() const { return items[0].size(); }
+  int items_rows() const { return items.size(); }
+
+  void open(int menu_x, int menu_y, char current_char) {
+    is_open = true;
+    cursor.x = cursor.y = 0;
+
+    if (menu_x + items_cols() > GRID_W)
+      menu_x = GRID_W - items_cols();
+
+    if (menu_y + items_rows() + 1 > GRID_H)
+      menu_y = GRID_H - items_rows() - 1;
+
+    pos.x = menu_x;
+    pos.y = menu_y;
+
+    for (int y = 0; y < items_rows(); y++) {
+      for (int x = 0; x < items_cols(); x++) {
+        if (items[y][x] == current_char ||
+            items[y][x] == toupper(current_char)) {
+          cursor.x = x;
+          cursor.y = y;
+        }
+      }
+    }
+  }
+
+  char accept() {
+    is_open = false;
+    auto c = items[cursor.y][cursor.x];
+    return ucase ? toupper(c) : tolower(c);
+  }
+
+  void toggle_case() { ucase = !ucase; }
+
+  void cancel() { is_open = false; }
+
+  void move_cursor(int dx, int dy) {
+    cursor.x = cursor.x + dx;
+    cursor.y = cursor.y + dy;
+
+    if (cursor.x >= items_cols())
+      cursor.x = 0;
+    if (cursor.x < 0)
+      cursor.x = items_cols() - 1;
+    if (cursor.y >= items_rows())
+      cursor.y = 0;
+    if (cursor.y < 0)
+      cursor.y = items_rows() - 1;
+  }
+
+} insert_menu;
+
+void print(TCODConsole *cons, int x, int y, const char *str, TCODColor fg,
+           TCODColor bg) {
+  int tx = x;
+  int ty = y;
+  while (*str) {
+    if (*str == '\n') {
+      tx = x;
+      ty++;
+    }
+    cons->putCharEx(tx++, ty, *str++, fg, bg);
+  }
+}
 
 int main() {
   printf("sizeof(Cell) = %zu\n", sizeof(Cell));
@@ -61,29 +142,51 @@ int main() {
            TCOD_EVENT_NONE) {
       switch (ev) {
       case TCOD_EVENT_KEY_PRESS: {
-        Point p = cursor;
-        p.x += (key.vk == TCODK_RIGHT) - (key.vk == TCODK_LEFT);
-        p.y += (key.vk == TCODK_DOWN) - (key.vk == TCODK_UP);
+        if (insert_menu.is_open == false) {
+          Point p = cursor;
+          p.x += (key.vk == TCODK_RIGHT) - (key.vk == TCODK_LEFT);
+          p.y += (key.vk == TCODK_DOWN) - (key.vk == TCODK_UP);
 
-        if (machine.is_valid(p.x, p.y))
-          cursor = p;
+          if (machine.is_valid(p.x, p.y))
+            cursor = p;
 
-        cursor_char += (key.vk == TCODK_PAGEUP) - (key.vk == TCODK_PAGEDOWN);
-        cursor_char %= sizeof(ALPHABET);
+          cursor_char += (key.vk == TCODK_PAGEUP) - (key.vk == TCODK_PAGEDOWN);
+          cursor_char %= sizeof(ALPHABET);
+        } else {
+          insert_menu.move_cursor(
+              (key.vk == TCODK_RIGHT) - (key.vk == TCODK_LEFT),
+              (key.vk == TCODK_DOWN) - (key.vk == TCODK_UP));
+        }
         break;
       }
       case TCOD_EVENT_KEY_RELEASE: {
-        // auto cursor_cell = machine.get_cell(cursor.x,
-        // cursor.y);//&cells[cursor.y][cursor.x];
-
-        if (key.vk == TCODK_ENTER)
-          machine.new_cell(cursor.x, cursor.y, ALPHABET[cursor_char]);
-
-        if (key.vk == TCODK_INSERT)
-          machine.new_cell(cursor.x, cursor.y, toupper(ALPHABET[cursor_char]));
-
-        if (key.vk == TCODK_DELETE)
-          machine.new_cell(cursor.x, cursor.y, '.');
+        if (insert_menu.is_open == false) {
+          switch (key.vk) {
+          case TCODK_INSERT: {
+            auto cur_char = machine.get_cell(cursor.x, cursor.y)->c;
+            insert_menu.open(cursor.x, cursor.y,
+                             cur_char == '.' ? 'O' : cur_char);
+            break;
+          }
+          case TCODK_DELETE:
+            machine.new_cell(cursor.x, cursor.y, '.');
+            break;
+          }
+        } else {
+          switch (key.vk) {
+          case TCODK_DELETE:
+            insert_menu.cancel();
+            break;
+          case TCODK_ENTER:
+          case TCODK_INSERT:
+            machine.new_cell(cursor.x, cursor.y, insert_menu.accept());
+            break;
+          case TCODK_PAGEDOWN:
+          case TCODK_PAGEUP:
+            insert_menu.toggle_case();
+            break;
+          }
+        }
         break;
       }
       default:
@@ -101,22 +204,11 @@ int main() {
 
     if (is_tick) {
       ticks++;
-      /*
-            // clear flags
-            for (int y = 0; y < GRID_H; ++y) {
-              for (int x = 0; x < GRID_W; ++x) {
-                auto cell = &cells[y][x];
-                cell->flags = 0;
-              }
-            }
-
-            tick(ticks);
-            */
-
       machine.tick();
     }
 
     auto root = TCODConsole::root;
+    root->clear();
 
     // draw grid
     for (int y = 0; y < GRID_H; ++y) {
@@ -157,68 +249,37 @@ int main() {
         else if (ch != '.') {
           root->putCharEx(x, y, ch, TCODColor::grey,
                           root->getDefaultBackground());
-          // root->setCharBackground(x, y, root->getDefaultBackground());
-          // root->setCharForeground(x, y,
-          //                         (cell->flags & CF_WAS_BANGED)
-          //                             ? TCODColor::white
-          //                             : TCODColor::grey);
         }
       }
     }
 
     auto cursor_cell = machine.get_cell(cursor.x, cursor.y);
 
-#if 1
-    root->setCharBackground(cursor.x, cursor.y, TCODColor::yellow);
-    root->setCharForeground(cursor.x, cursor.y, TCODColor::black);
+    if (!insert_menu.is_open) {
+      root->putCharEx(cursor.x, cursor.y,
+                      cursor_cell->c == '.' ? '@' : cursor_cell->c,
+                      TCODColor::black, TCODColor::yellow);
+    } else {
+      int draw_x = insert_menu.pos.x;
+      int draw_y = insert_menu.pos.y;
 
-    if (frames % 30 > 15)
-      root->putCharEx(cursor.x, cursor.y, ALPHABET[cursor_char], TCODColor::black, TCODColor::yellow);
-    else
-      root->putCharEx(cursor.x, cursor.y, cursor_cell->c, TCODColor::yellow, TCODColor::black);
-#else
-    const char chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ*#:%!?;=$.....";
-    const int menu_cols = 10;
-    const int menu_rows = sizeof(chars) / menu_cols;
+      print(root, draw_x, draw_y++, "INS -", TCODColor::yellow,
+            TCODColor::blue);
 
-    int menu_pos = 0;
-    for (int i = 0; i < sizeof(chars); ++i) {
-      if (cursor_cell->c == chars[i] || toupper(cursor_cell->c) == chars[i]) {
-        menu_pos = i;
-        break;
+      for (int y = 0; y < insert_menu.items_rows(); ++y) {
+        for (int x = 0; x < insert_menu.items_cols(); ++x) {
+          char c = insert_menu.ucase ? toupper(insert_menu.items[y][x])
+                                     : tolower(insert_menu.items[y][x]);
+
+          root->putChar(draw_x + x, draw_y + y, c);
+          if (x == insert_menu.cursor.x && y == insert_menu.cursor.y) {
+            root->setCharBackground(draw_x + x, draw_y + y, TCODColor::yellow);
+            root->setCharForeground(draw_x + x, draw_y + y, TCODColor::black);
+          } else
+            root->setCharBackground(draw_x + x, draw_y + y, TCODColor::grey);
+        }
       }
     }
-
-    int cursor_col = menu_pos % menu_cols;
-    int cursor_row = menu_pos / menu_rows;
-
-    int menu_x = cursor.x;
-    int menu_y = cursor.y;
-
-    if (menu_x + menu_cols > GRID_W)
-      menu_x = GRID_W - menu_cols;
-
-    if (menu_y + menu_rows > GRID_H)
-      menu_y = GRID_H - menu_rows;
-
-    for (int y = 0; y < menu_rows; ++y) {
-      for (int x = 0; x < menu_cols; ++x) {
-        int idx = y * menu_cols + x;
-        char c = '.';
-
-        if (idx < sizeof(chars))
-          c = chars[idx];
-
-        root->putChar(menu_x + x, menu_y + y, c);
-        if (cursor_cell->c == c) {
-          root->setCharBackground(menu_x + x, menu_y + y, TCODColor::yellow);
-          root->setCharForeground(menu_x + x, menu_y + y, TCODColor::black);
-        } else
-          root->setCharBackground(menu_x + x, menu_y + y, TCODColor::grey);
-      }
-    }
-
-#endif
 
     root->printf(0, 21, "      %02i,%02i %8uf", cursor.x, cursor.y, ticks);
     root->printf(0, 22, "            %8u%c", bpm, is_beat ? '*' : ' ');
