@@ -7,7 +7,9 @@ find_package(SDL2 CONFIG REQUIRED)
 
 pkg_check_modules(SFML sfml-all)
 add_executable(musigrid
-  main.cpp)
+  main.cpp
+  machine.hpp
+  machine.cpp)
 
 add_subdirectory(libtcod/src)
 
