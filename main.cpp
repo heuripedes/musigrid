@@ -103,7 +103,7 @@ void print(TCODConsole *cons, int x, int y, const char *str, TCODColor fg,
   }
 }
 
-int main() {
+int main(int, char*[]) {
   printf("sizeof(Cell) = %zu\n", sizeof(Cell));
 
   TCOD_key_t key = {TCODK_NONE, 0};

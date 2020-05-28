@@ -377,18 +377,17 @@ void Machine::tick() {
         write_locked(x, y + 1, int_to_b36(res, isupper(target)), "Z-output");
         break;
       }
-      case '*':
+      case '*': {
         cell->c = '.';
-        for (int cy = -1; cy <= 1; cy++) {
-          for (int cx = -1; cx <= 1; cx++) {
-            if ((cx < 0 && (cy < 0 || cy > 0) ||
-                 (cx > 0 && (cy < 0 || cy > 0))))
-              continue;
-            if (cx + x != x && cy + y != y && is_valid(cx + x, cy + y))
-              cells[cy + y][cx + x].flags |= CF_WAS_BANGED;
-          }
+        Cell *neigh[] = {get_cell(x, y - 1), get_cell(x, y + 1),
+                         get_cell(x - 1, y), get_cell(x + 1, y)};
+
+        for (int i = 0; i < sizeof(neigh) / sizeof(neigh[0]); ++i) {
+          if (neigh[i])
+            neigh[i]->flags |= CF_WAS_BANGED;
         }
         break;
+      }
       case '#':
         for (int i = x; i < grid_w(); ++i) {
           lock_cell(i, y);
