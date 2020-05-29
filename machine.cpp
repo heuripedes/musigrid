@@ -4,7 +4,10 @@
 
 void Machine::init(int width, int height) {
   cells.resize(height);
+  cell_descs.resize(height);
   for (auto &row : cells)
+    row.resize(width);
+  for (auto &row : cell_descs)
     row.resize(width);
 }
 
@@ -26,6 +29,12 @@ void Machine::tick() {
 
   for (int y = 0; y < grid_h(); ++y) {
     for (int x = 0; x < grid_w(); ++x) {
+      cell_descs[y][x] = "empty";
+    }
+  }
+
+  for (int y = 0; y < grid_h(); ++y) {
+    for (int x = 0; x < grid_w(); ++x) {
       auto cell = &cells[y][x];
 
       if (cell->flags & CF_WAS_TICKED)
@@ -39,6 +48,8 @@ void Machine::tick() {
         continue;
 
       cell->flags |= CF_WAS_TICKED;
+
+      cell_descs[y][x] = operator_names[effective_c];
 
 #define DEF_ARITH_BINOP(NAME, OPERATION)                                       \
   do {                                                                         \

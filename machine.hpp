@@ -1,6 +1,7 @@
 #pragma once
 
 #include <assert.h>
+#include <map>
 #include <vector>
 
 static inline char int_to_b36(int v, bool upper) {
@@ -46,6 +47,22 @@ struct Cell {
 
 struct Machine {
   std::vector<std::vector<Cell>> cells;
+  std::vector<std::vector<const char *>> cell_descs;
+  std::map<char, const char *> operator_names = {
+      {'A', "add"},       {'B', "subtract"}, {'C', "clock"},
+      {'D', "delay"},     {'E', "east"},     {'F', "if"},
+      {'G', "generator"}, {'H', "halt"},     {'I', "increment"},
+      {'J', "jumper"},    {'K', "konkat"},   {'L', "less"},
+      {'M', "multiply"},  {'N', "north"},    {'O', "read"},
+      {'P', "push"},      {'Q', "query"},    {'R', "random"},
+      {'S', "south"},     {'T', "track"},    {'U', "uclid"},
+      {'V', "variable"},  {'W', "west"},     {'X', "write"},
+      {'Y', "jymper"},    {'Z', "lerp"},     {'*', "bang"},
+      {'#', "comment"},   {':', "midi"},     {'%', "mono"},
+      {'!', "cc"},        {'?', "pb"},       {';', "udp"},
+      {'=', "osc"},       {'$', "self"},
+  };
+
   char variables[36];
 
   unsigned ticks = 0;
@@ -87,6 +104,7 @@ struct Machine {
     auto cell = get_cell(x, y);
 
     if (cell) {
+      cell_descs[y][x] = desc;
       cell->flags |= CF_WAS_READ;
       cell->flags |= CF_IS_LOCKED;
       return cell->c;
@@ -99,6 +117,7 @@ struct Machine {
     auto cell = get_cell(x, y);
 
     if (cell) {
+      cell_descs[y][x] = desc;
       cell->flags |= CF_WAS_WRITTEN;
       cell->flags |= CF_IS_LOCKED;
       cell->c = c;
@@ -108,6 +127,7 @@ struct Machine {
   char read_cell(int x, int y, const char *desc) {
     auto cell = get_cell(x, y);
     if (cell) {
+      cell_descs[y][x] = desc;
       cell->flags |= CF_WAS_READ;
 
       return cell->c;

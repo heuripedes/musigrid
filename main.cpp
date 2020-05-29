@@ -113,7 +113,10 @@ int main(int, char *[]) {
       "/home/higor/code/musigrid/libtcod/data/fonts/terminal10x16_gs_tc.png",
       TCOD_FONT_LAYOUT_TCOD);
 
-  TCODConsole::initRoot(80, 25, "libtcod C++ sample");
+  Machine machine;
+  machine.init(GRID_W, GRID_H);
+
+  TCODConsole::initRoot(machine.grid_w(), machine.grid_h() + 4, "libtcod C++ sample");
   SDL_SetWindowResizable(TCOD_sys_get_sdl_window(), SDL_FALSE);
   atexit(TCOD_quit);
 
@@ -127,8 +130,7 @@ int main(int, char *[]) {
 
   unsigned speed = 2;
 
-  Machine machine;
-  machine.init(GRID_W, GRID_H);
+  
 
   while (!TCODConsole::isWindowClosed()) {
     TCOD_event_t ev;
@@ -278,8 +280,10 @@ int main(int, char *[]) {
       }
     }
 
-    root->printf(0, 21, "      %02i,%02i %8uf", cursor.x, cursor.y, ticks);
-    root->printf(0, 22, "            %8u%c", bpm, is_beat ? '*' : ' ');
+    root->printf(0, machine.grid_h() + 1, " %10s   %02i,%02i %8uf",
+                 machine.cell_descs[cursor.y][cursor.x], cursor.x, cursor.y,
+                 ticks);
+    root->printf(0, machine.grid_h() + 2, " %10s   %2s %2s %8u%c", "", "", "", bpm, is_beat ? '*' : ' ');
 
     TCODConsole::flush();
 
