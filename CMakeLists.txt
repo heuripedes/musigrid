@@ -4,12 +4,29 @@ project(musigrid)
 set(OpenGL_GL_PREFERENCE "GLVND")
 find_package(PkgConfig)
 find_package(SDL2 CONFIG REQUIRED)
+include(CheckCXXCompilerFlag)
 
 pkg_check_modules(SFML sfml-all)
 add_executable(musigrid
   main.cpp
   machine.hpp
   machine.cpp)
+
+
+if (MSVC)
+else()
+check_cxx_compiler_flag(-Wduplicated-cond WDUPLICATED_COND)
+check_cxx_compiler_flag(-Wduplicated-branches WDUPLICATED_BRANCHES)
+check_cxx_compiler_flag(WLOGICAL_OP  -Wlogical-op)
+check_cxx_compiler_flag(-Wnull-dereference WNULL_DEREFERENCE)
+
+target_compile_options(musigrid PRIVATE -Wall
+  $<$<BOOL:WDUPLICATED_COND>:-Wduplicated-cond>
+  $<$<BOOL:WDUPLICATED_BRANCHES>:-Wduplicated-branches>
+  $<$<BOOL:WLOGICAL_OP>:-Wlogical-op>
+  $<$<BOOL:WNULL_DEREFERENCE>:-Wnull-dereference>
+)
+endif()
 
 add_subdirectory(libtcod/src)
 

@@ -23,13 +23,18 @@ static inline int b36_to_int(char ch) {
   return -1;
 }
 
+static inline bool is_operator_ch(char ch) {
+  return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '*' ||
+         ch == '#' || ch == ':' || ch == '%' || ch == '!' || ch == '?' ||
+         ch == ';' || ch == '=' || ch == '$';
+}
+
 enum CellFlags {
   CF_WAS_TICKED = 1 << 0, // we have already ticked this cell
   CF_WAS_BANGED = 1 << 1, // something banged this cell
   CF_WAS_READ = 1 << 2,
   CF_WAS_WRITTEN = 1 << 3,
-  CF_IS_INPUT = 1 << 4,
-  CF_IS_LOCKED = 1 << 5,
+  CF_IS_LOCKED = 1 << 4,
 };
 
 struct Cell {
@@ -70,6 +75,7 @@ struct Machine {
       cells[y + Y][x + X] = *cell;
       cells[y + Y][x + X].flags |= CF_WAS_TICKED;
       cell->c = '.';
+      cell->flags &= ~CF_WAS_TICKED;
     } else {
       cell->c = '*';
     }

@@ -103,7 +103,7 @@ void print(TCODConsole *cons, int x, int y, const char *str, TCODColor fg,
   }
 }
 
-int main(int, char*[]) {
+int main(int, char *[]) {
   printf("sizeof(Cell) = %zu\n", sizeof(Cell));
 
   TCOD_key_t key = {TCODK_NONE, 0};
@@ -171,6 +171,8 @@ int main(int, char*[]) {
           case TCODK_DELETE:
             machine.new_cell(cursor.x, cursor.y, '.');
             break;
+          default:
+            break;
           }
         } else {
           switch (key.vk) {
@@ -184,6 +186,8 @@ int main(int, char*[]) {
           case TCODK_PAGEDOWN:
           case TCODK_PAGEUP:
             insert_menu.toggle_case();
+            break;
+          default:
             break;
           }
         }
@@ -229,27 +233,20 @@ int main(int, char*[]) {
         auto cell = machine.get_cell(x, y);
         char ch = cell->c;
 
-        if (cursor.x == x && cursor.y == y && cell->c == '.')
-          ch = int_to_b36(cursor_char, false);
-
-        if (cell->flags & CF_WAS_READ) {
-          if (cell->flags & CF_IS_LOCKED)
-            root->putCharEx(x, y, ch, TCODColor::white,
-                            root->getDefaultBackground());
-          else
-            root->putCharEx(x, y, ch, TCODColor::cyan,
-                            root->getDefaultBackground());
-        } else if (cell->flags & CF_WAS_WRITTEN)
-          root->putCharEx(x, y, ch, TCODColor::black, TCODColor::white);
-        else if (isupper(ch))
+        if (cell->flags & CF_WAS_TICKED)
           root->putCharEx(x, y, ch, TCODColor::black, TCODColor::cyan);
-        else if (cell->flags & CF_IS_LOCKED)
-          root->putCharEx(x, y, ch, TCODColor::grey,
+        else if (cell->flags & CF_WAS_READ)
+          root->putCharEx(x, y, ch,
+                          (cell->flags & CF_IS_LOCKED) ? TCODColor::white
+                                                       : TCODColor::cyan,
                           root->getDefaultBackground());
-        else if (ch != '.') {
-          root->putCharEx(x, y, ch, TCODColor::grey,
+        else if (cell->flags & CF_WAS_WRITTEN)
+          root->putCharEx(x, y, ch, TCODColor::black, TCODColor::white);
+        else if (ch != '.' || cell->flags & CF_IS_LOCKED)
+          root->putCharEx(x, y, ch,
+                          (cell->flags & CF_WAS_READ) ? TCODColor::white
+                                                      : TCODColor::grey,
                           root->getDefaultBackground());
-        }
       }
     }
 

@@ -31,14 +31,14 @@ void Machine::tick() {
       if (cell->flags & CF_WAS_TICKED)
         continue;
 
-      cell->flags |= CF_WAS_TICKED;
-
       char effective_c =
           (cell->flags & CF_WAS_BANGED) ? toupper(cell->c) : cell->c;
 
       if (effective_c == '.' || islower(effective_c) || isdigit(effective_c) ||
           cell->flags & CF_IS_LOCKED)
         continue;
+
+      cell->flags |= CF_WAS_TICKED;
 
 #define DEF_ARITH_BINOP(NAME, OPERATION)                                       \
   do {                                                                         \
@@ -382,7 +382,7 @@ void Machine::tick() {
         Cell *neigh[] = {get_cell(x, y - 1), get_cell(x, y + 1),
                          get_cell(x - 1, y), get_cell(x + 1, y)};
 
-        for (int i = 0; i < sizeof(neigh) / sizeof(neigh[0]); ++i) {
+        for (unsigned i = 0; i < sizeof(neigh) / sizeof(neigh[0]); ++i) {
           if (neigh[i])
             neigh[i]->flags |= CF_WAS_BANGED;
         }
