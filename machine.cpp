@@ -44,12 +44,15 @@ static int note_octave0_to_key(char note, int octave0) {
   //    https://newt.phys.unsw.edu.au/jw/notes.html
   //
   //                                    A,  B, C, D, E, F, G
-  static const int8_t midi_notes[] =  { 9, 11, 0, 2, 4, 5, 7 };
+  static const int midi_notes[] =  { 9, 11, 0, 2, 4, 5, 7 };
   // clang-format on
 
   bool sharp = islower(note);
 
   note = toupper(note);
+
+  if (note < 'A' || note > 'Z')
+    return -1;
 
   // wrap
   // this is probably wrong. orca's README says:

@@ -113,7 +113,7 @@ Machine machine;
 
 struct {
   std::mutex mut;
-  std::condition_variable read_cv, write_cv;
+  std::condition_variable read_cv;
   int notes = 0;
   bool quit = false;
 } audio;
@@ -130,27 +130,8 @@ static void audio_callback(void *userdata, Uint8 *stream, int len) {
   else {
     int sample_count = (len / (2 * sizeof(int16_t))); // 2 output channels
     tsf_render_short(machine.sf, (int16_t *)stream, sample_count, 0);
-    // machine.audio_buffer.read(stream, len);
   }
-
-  // audio.write_cv.notify_one();
 }
-
-// void audio_write(const int16_t *frames, size_t num_frames) {
-//   size_t size = num_frames * 2 * sizeof(*frames);
-//   const uint8_t *data = (uint8_t *)frames;
-//   std::unique_lock<std::mutex> lk(audio.mut);
-//   while (size) {
-//     audio.write_cv.wait(lk, [&]() { return !machine.audio_buffer.is_full();
-//     });
-
-//     size_t written = machine.audio_buffer.write(data, size);
-//     data += written;
-//     size -= written;
-
-//     audio.read_cv.notify_one();
-//   }
-// }
 
 int main(int, char *[]) {
   printf("sizeof(Cell) = %zu\n", sizeof(Cell));
@@ -327,7 +308,6 @@ int main(int, char *[]) {
       }
     }
 
-
     if (!insert_menu.is_open) {
       root->putCharEx(cursor.x, cursor.y,
                       cursor_cell->c == '.' ? '@' : cursor_cell->c,
@@ -363,6 +343,14 @@ int main(int, char *[]) {
     TCODConsole::flush();
 
     frames++;
+  }
+
+  {
+    std::unique_lock<std::mutex> lk(audio.mut);
+    audio.quit = true;
+    lk.unlock();
+    audio.read_cv.notify_one();
+    SDL_PauseAudioDevice(audio_dev, true);
   }
 
   TCOD_quit();
