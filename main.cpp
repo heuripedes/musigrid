@@ -298,12 +298,19 @@ int main(int, char *[]) {
     }
 
     // render chars
+    auto cursor_cell = machine.get_cell(cursor.x, cursor.y);
+
     for (int y = 0; y < machine.grid_h(); ++y) {
       for (int x = 0; x < machine.grid_w(); ++x) {
         auto cell = machine.get_cell(x, y);
         char ch = cell->c;
 
-        if (cell->flags & CF_WAS_TICKED && cell->c != '#')
+        if (cursor_cell->c == cell->c && cell->c != '.') {
+          root->putCharEx(x, y, ch, TCODColor::orange, TCODColor::black);
+          continue;
+        }
+
+        if (cell->flags & CF_WAS_TICKED)
           root->putCharEx(x, y, ch, TCODColor::black, TCODColor::cyan);
         else if (cell->flags & CF_WAS_READ)
           root->putCharEx(x, y, ch,
@@ -320,7 +327,6 @@ int main(int, char *[]) {
       }
     }
 
-    auto cursor_cell = machine.get_cell(cursor.x, cursor.y);
 
     if (!insert_menu.is_open) {
       root->putCharEx(cursor.x, cursor.y,

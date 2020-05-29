@@ -217,28 +217,9 @@ void Machine::tick() {
         if (rate < 1)
           rate = 1;
 
-        auto out_cell = get_cell(x, y + 1);
-        if (out_cell) {
-          bool bang = false;
-          if (mod == 0)
-            bang = false;
-          else if (mod == 1)
-            bang = true;
-          else if (ticks % (rate * mod) == 0)
-            bang = true;
+        bool bang = mod != 0 && (mod == 1 || (ticks % (rate * mod) == 0));
+        write_locked(x, y + 1, (bang ? '*' : '.'), "D-output");
 
-          write_locked(x, y + 1, (bang ? '*' : '.'), "D-output");
-
-          // the code bellow only exists because otherwise the
-          // '*' character will not be displayed.
-          // TODO: fix this.
-          if (bang) {
-            x = x;
-            y = y + 1;
-            goto bang_now;
-          }
-          // delay it one frame.
-        }
         break;
       }
       case 'E':

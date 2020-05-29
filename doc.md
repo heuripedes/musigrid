@@ -1,3 +1,9 @@
+Some tutorials:
+https://www.youtube.com/watch?v=ktcWOLeWP-g
+
+https://wiki.xxiivv.com/site/orca.html
+https://esolangs.org/wiki/Orca
+
 > Operators will always follow the capitalization on it's right side -- Orca Workshop - Basics (1/3) https://www.youtube.com/watch?v=WIzI_PSBw6o&t=17m15s
 
 Green fg: input cells
