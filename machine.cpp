@@ -106,8 +106,8 @@ void Machine::init(int width, int height) {
                         "..........................................",
                         "..........................................",
                         NULL};
-  for (int y = 0; data[y]; ++y) {
-    for (int x = 0; data[y][x]; ++x) {
+  for (int y = 0; data[y] && y < grid_h(); ++y) {
+    for (int x = 0; data[y][x] && x < grid_w(); ++x) {
       cells[y][x].c = data[y][x];
     }
   }

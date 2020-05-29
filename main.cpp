@@ -18,8 +18,8 @@
 #include "libtcod/src/libtcod/console_types.h"
 #include "machine.hpp"
 
-#define GRID_W 80
-#define GRID_H 20
+#define GRID_W 48
+#define GRID_H 15
 
 struct Point {
   int x{0}, y{0};
@@ -164,9 +164,15 @@ int main(int, char *[]) {
 
   machine.init(GRID_W, GRID_H);
 
-  TCODConsole::initRoot(machine.grid_w(), machine.grid_h() + 4,
+  TCODConsole::initRoot(machine.grid_w(), machine.grid_h() + 2,
                         "libtcod C++ sample");
   SDL_SetWindowResizable(TCOD_sys_get_sdl_window(), SDL_FALSE);
+  {
+    int ww;
+    int wh;
+    SDL_GetWindowSize(TCOD_sys_get_sdl_window(), &ww, &wh);
+    printf("window size is %ix%i\n", ww, wh);
+  }
   atexit(TCOD_quit);
 
   SDL_Init(SDL_INIT_AUDIO);
@@ -342,10 +348,10 @@ int main(int, char *[]) {
       }
     }
 
-    root->printf(0, machine.grid_h() + 1, " %10s   %02i,%02i %8uf",
+    root->printf(0, machine.grid_h() + 0, " %10s   %02i,%02i %8uf",
                  machine.cell_descs[cursor.y][cursor.x], cursor.x, cursor.y,
                  ticks);
-    root->printf(0, machine.grid_h() + 2, " %10s   %2s %2s %8u%c", "", "", "",
+    root->printf(0, machine.grid_h() + 1, " %10s   %2s %2s %8u%c", "", "", "",
                  bpm, is_beat ? '*' : ' ');
 
     TCODConsole::flush();
