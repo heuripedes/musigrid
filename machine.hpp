@@ -28,12 +28,6 @@ static inline int b36_to_int(char ch) {
   return -1;
 }
 
-static inline bool is_operator_ch(char ch) {
-  return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '*' ||
-         ch == '#' || ch == ':' || ch == '%' || ch == '!' || ch == '?' ||
-         ch == ';' || ch == '=' || ch == '$';
-}
-
 enum CellFlags {
   CF_WAS_TICKED = 1 << 0, // we have already ticked this cell
   CF_WAS_BANGED = 1 << 1, // something banged this cell

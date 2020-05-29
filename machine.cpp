@@ -78,8 +78,7 @@ static int note_octave0_to_key(char note, int octave0) {
 void Machine::init(int width, int height) {
   if (!sf)
     sf = tsf_load_filename("/usr/share/soundfonts/FluidR3_GM.sf2");
-  // sf = tsf_load_filename("/usr/share/soundfonts/default.sf2");
-  // sf = tsf_load_memory(MinimalSoundFont, sizeof(MinimalSoundFont));
+    // sf = tsf_load_memory(MinimalSoundFont, sizeof(MinimalSoundFont));
 
   for (int i = 0; i < 7; ++i)
     tsf_channel_set_presetnumber(sf, i, 0, 0);
@@ -90,6 +89,7 @@ void Machine::init(int width, int height) {
     row.resize(width);
   for (auto &row : cell_descs)
     row.resize(width);
+#if 0
   const char *data[] = {"..........................................",
                         ".#.MIDI.#.................................",
                         "..........................................",
@@ -114,6 +114,7 @@ void Machine::init(int width, int height) {
       cells[y][x].c = data[y][x];
     }
   }
+#endif
 }
 
 void Machine::reset() {
@@ -163,7 +164,7 @@ void Machine::tick() {
           (cell->flags & CF_WAS_BANGED) ? toupper(cell->c) : cell->c;
 
       if (effective_c == '.' || islower(effective_c) || isdigit(effective_c) ||
-          cell->flags & CF_IS_LOCKED)
+          (cell->flags & CF_IS_LOCKED && effective_c != '*'))
         continue;
 
       cell->flags |= CF_WAS_TICKED;
@@ -222,7 +223,6 @@ void Machine::tick() {
 
         bool bang = mod != 0 && (mod == 1 || (ticks % (rate * mod) == 0));
         write_locked(x, y + 1, (bang ? '*' : '.'), "D-output");
-
         break;
       }
       case 'E':
@@ -504,7 +504,7 @@ void Machine::tick() {
       }
       case '*': {
         cell->c = '.';
-      bang_now: // HACK TO GET D TO WORK PROPERLY
+
         Cell *neigh[] = {get_cell(x, y - 1), get_cell(x, y + 1),
                          get_cell(x - 1, y), get_cell(x + 1, y)};
 
@@ -534,7 +534,6 @@ void Machine::tick() {
         int length = lengthc == '.' ? 1 : b36_to_int(lengthc);
 
         if (cell->flags & CF_WAS_BANGED) {
-          // reference: https://www.barryrudolph.com/greg/midi.html
           Note n;
           n.key = note_octave0_to_key(notec, octave);
           n.channel = channel;
