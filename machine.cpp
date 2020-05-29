@@ -1,14 +1,116 @@
+#include <algorithm>
+#include <stdint.h>
+#define TSF_IMPLEMENTATION
+
 #include "machine.hpp"
 #include <ctype.h>
 #include <stdlib.h>
 
+// This is a minimal SoundFont with a single loopin saw-wave
+// sample/instrument/preset (484 bytes)
+const static unsigned char MinimalSoundFont[] = {
+#define TEN0 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    'R', 'I',  'F',  'F',  220,  1,    0,    0,    's',  'f',  'b',  'k',  'L',
+    'I', 'S',  'T',  88,   1,    0,    0,    'p',  'd',  't',  'a',  'p',  'h',
+    'd', 'r',  76,   TEN0, TEN0, TEN0, TEN0, 0,    0,    0,    0,    TEN0, 0,
+    0,   0,    0,    0,    0,    0,    255,  0,    255,  0,    1,    TEN0, 0,
+    0,   0,    'p',  'b',  'a',  'g',  8,    0,    0,    0,    0,    0,    0,
+    0,   1,    0,    0,    0,    'p',  'm',  'o',  'd',  10,   TEN0, 0,    0,
+    0,   'p',  'g',  'e',  'n',  8,    0,    0,    0,    41,   0,    0,    0,
+    0,   0,    0,    0,    'i',  'n',  's',  't',  44,   TEN0, TEN0, 0,    0,
+    0,   0,    0,    0,    0,    0,    TEN0, 0,    0,    0,    0,    0,    0,
+    0,   1,    0,    'i',  'b',  'a',  'g',  8,    0,    0,    0,    0,    0,
+    0,   0,    2,    0,    0,    0,    'i',  'm',  'o',  'd',  10,   TEN0, 0,
+    0,   0,    'i',  'g',  'e',  'n',  12,   0,    0,    0,    54,   0,    1,
+    0,   53,   0,    0,    0,    0,    0,    0,    0,    's',  'h',  'd',  'r',
+    92,  TEN0, TEN0, 0,    0,    0,    0,    0,    0,    0,    50,   0,    0,
+    0,   0,    0,    0,    0,    49,   0,    0,    0,    34,   86,   0,    0,
+    60,  0,    0,    0,    1,    TEN0, TEN0, TEN0, TEN0, 0,    0,    0,    0,
+    0,   0,    0,    'L',  'I',  'S',  'T',  112,  0,    0,    0,    's',  'd',
+    't', 'a',  's',  'm',  'p',  'l',  100,  0,    0,    0,    86,   0,    119,
+    3,   31,   7,    147,  10,   43,   14,   169,  17,   58,   21,   189,  24,
+    73,  28,   204,  31,   73,   35,   249,  38,   46,   42,   71,   46,   250,
+    48,  150,  53,   242,  55,   126,  60,   151,  63,   108,  66,   126,  72,
+    207, 70,   86,   83,   100,  72,   74,   100,  163,  39,   241,  163,  59,
+    175, 59,   179,  9,    179,  134,  187,  6,    186,  2,    194,  5,    194,
+    15,  200,  6,    202,  96,   206,  159,  209,  35,   213,  213,  216,  45,
+    220, 221,  223,  76,   227,  221,  230,  91,   234,  242,  237,  105,  241,
+    8,   245,  118,  248,  32,   252};
+
+static int note_octave0_to_key(char note, int octave0) {
+  // clang-format off
+  // Reference:
+  //    https://www.barryrudolph.com/greg/midi.html
+  //    https://newt.phys.unsw.edu.au/jw/notes.html
+  //
+  //                                    A,  B, C, D, E, F, G
+  static const int8_t midi_notes[] =  { 9, 11, 0, 2, 4, 5, 7 };
+  // clang-format on
+
+  bool sharp = islower(note);
+
+  note = toupper(note);
+
+  // wrap
+  // this is probably wrong. orca's README says:
+  // "The midi operator interprets any letter above the chromatic scale as a
+  // transpose value, for instance 3H, is equivalent to 4A."
+  // also H -> A, I -> B
+  while (note > 'I') {
+    note -= 'I';
+    octave0++;
+  }
+
+  // map H -> A and I -> B
+  if (note > 'G')
+    note -= 'G';
+
+  int out = midi_notes[note - 'A'];
+  out += (octave0 + 1) * 12;
+  out += sharp;
+
+  return out;
+}
+
 void Machine::init(int width, int height) {
+  if (!sf)
+    sf = tsf_load_filename("/usr/share/soundfonts/FluidR3_GM.sf2");
+  // sf = tsf_load_filename("/usr/share/soundfonts/default.sf2");
+  // sf = tsf_load_memory(MinimalSoundFont, sizeof(MinimalSoundFont));
+
+  for (int i = 0; i < 7; ++i)
+    tsf_channel_set_presetnumber(sf, i, 0, 0);
+
   cells.resize(height);
   cell_descs.resize(height);
   for (auto &row : cells)
     row.resize(width);
   for (auto &row : cell_descs)
     row.resize(width);
+  const char *data[] = {"..........................................",
+                        ".#.MIDI.#.................................",
+                        "..........................................",
+                        "...wC4....................................",
+                        ".gD204TCAFE..################.............",
+                        "...:02C.g....#..............#.............",
+                        ".............#..Channel..1..#.............",
+                        "...8C4.......#..Octave.234..#.............",
+                        ".4D234TCAFE..#..Notes.CAFE..#.............",
+                        "...:13E.4....#..............#.............",
+                        ".............################.............",
+                        "...4C4....................................",
+                        ".1D424TCAFE...............................",
+                        "...%24F.2.................................",
+                        "..........................................",
+                        "..........................................",
+                        "..........................................",
+                        "..........................................",
+                        NULL};
+  for (int y = 0; data[y]; ++y) {
+    for (int x = 0; data[y][x]; ++x) {
+      cells[y][x].c = data[y][x];
+    }
+  }
 }
 
 void Machine::reset() {
@@ -20,12 +122,26 @@ void Machine::reset() {
 }
 
 void Machine::tick() {
+  // clear flags
   for (int y = 0; y < grid_h(); ++y) {
     for (int x = 0; x < grid_w(); ++x) {
       auto cell = &cells[y][x];
       cell->flags = 0;
     }
   }
+
+  // silence notes
+  // tsf_note_off_all(sf);
+
+  notes.erase(std::remove_if(notes.begin(), notes.end(),
+                             [&](auto &note) {
+                               auto val = --note.length < 1;
+                               if (val)
+                                 tsf_channel_note_off(sf, note.channel,
+                                                      note.key);
+                               return val;
+                             }),
+              notes.end());
 
   for (int y = 0; y < grid_h(); ++y) {
     for (int x = 0; x < grid_w(); ++x) {
@@ -101,13 +217,27 @@ void Machine::tick() {
         if (rate < 1)
           rate = 1;
 
-        if (mod == 0)
-          write_locked(x, y + 1, '.', "D-output");
-        else if (mod == 1)
-          write_locked(x, y + 1, '*', "D-output");
-        else {
-          char res = (ticks % rate == 0 && ticks % mod == 0) ? '*' : '.';
-          write_locked(x, y + 1, res, "D-output");
+        auto out_cell = get_cell(x, y + 1);
+        if (out_cell) {
+          bool bang = false;
+          if (mod == 0)
+            bang = false;
+          else if (mod == 1)
+            bang = true;
+          else if (ticks % (rate * mod) == 0)
+            bang = true;
+
+          write_locked(x, y + 1, (bang ? '*' : '.'), "D-output");
+
+          // the code bellow only exists because otherwise the
+          // '*' character will not be displayed.
+          // TODO: fix this.
+          if (bang) {
+            x = x;
+            y = y + 1;
+            goto bang_now;
+          }
+          // delay it one frame.
         }
         break;
       }
@@ -390,6 +520,7 @@ void Machine::tick() {
       }
       case '*': {
         cell->c = '.';
+      bang_now: // HACK TO GET D TO WORK PROPERLY
         Cell *neigh[] = {get_cell(x, y - 1), get_cell(x, y + 1),
                          get_cell(x - 1, y), get_cell(x + 1, y)};
 
@@ -406,6 +537,61 @@ void Machine::tick() {
             break;
         }
         break;
+      case ':': {
+        char channelc = read_locked(x + 1, y, ":-channel");
+        char octavec = read_locked(x + 2, y, ":-octave");
+        char notec = read_locked(x + 3, y, ":-note");
+        char velocityc = read_locked(x + 4, y, ":-velocity");
+        char lengthc = read_locked(x + 5, y, ":-length");
+
+        int channel = channelc == '.' ? 0 : b36_to_int(channelc);
+        int octave = octavec == '.' ? 0 : b36_to_int(octavec);
+        int velocity = velocityc == '.' ? 15 : b36_to_int(velocityc);
+        int length = lengthc == '.' ? 1 : b36_to_int(lengthc);
+
+        if (cell->flags & CF_WAS_BANGED) {
+          // reference: https://www.barryrudolph.com/greg/midi.html
+          Note n;
+          n.key = note_octave0_to_key(notec, octave);
+          n.channel = channel;
+          n.velocity = (velocity % 16) / 16.0f;
+          n.length = length; // length % g
+          notes.push_back(n);
+          tsf_channel_note_on(sf, n.channel, n.key, n.velocity);
+        }
+        break;
+      }
+      case '%': {
+        char channelc = read_locked(x + 1, y, "%-channel");
+        char octavec = read_locked(x + 2, y, "%-octave");
+        char notec = read_locked(x + 3, y, "%-note");
+        char velocityc = read_locked(x + 4, y, "%-velocity");
+        char lengthc = read_locked(x + 5, y, "%-length");
+
+        int channel = channelc == '.' ? 0 : b36_to_int(channelc);
+        int octave = octavec == '.' ? 0 : b36_to_int(octavec);
+        int velocity = velocityc == '.' ? 15 : b36_to_int(velocityc);
+        int length = lengthc == '.' ? 1 : b36_to_int(lengthc);
+
+        if (cell->flags & CF_WAS_BANGED) {
+          Note n;
+          n.key = note_octave0_to_key(notec, octave);
+          n.channel = channel;
+          n.velocity = (velocity % 16) / 16.0f;
+          n.length = length; // length % g
+
+          for (auto &note : notes) {
+            if (note.channel == n.channel)
+              note.length = 0;
+          }
+
+          notes.push_back(n);
+          printf("%c + %i -> %i\n", notec, octave, n.key);
+          tsf_channel_note_on(sf, n.channel, n.key, n.velocity);
+          // tsf_channel_set_pan(sf, n.channel, ticks % 2 == 0);
+        }
+        break;
+      }
       }
     }
   }

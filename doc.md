@@ -27,7 +27,7 @@ Gray fg: "locked" (no execution)
     else if mod == 1
         bang = 1
     else
-        bang = ticks % rate == 0 && ticks % mod == 0
+        bang = ticks % (rate * mod) == 0
 
     default mod is 10, default rate is 1
 

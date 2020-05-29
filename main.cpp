@@ -1,10 +1,14 @@
 #include <SDL.h>
+#include <SDL_audio.h>
 #include <assert.h>
 #include <cctype>
 #include <cfloat>
+#include <condition_variable>
 #include <cstdlib>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <stdint.h>
 #include <vector>
 
 #include "libtcod/src/libtcod.hpp"
@@ -103,6 +107,51 @@ void print(TCODConsole *cons, int x, int y, const char *str, TCODColor fg,
   }
 }
 
+SDL_AudioDeviceID audio_dev;
+
+Machine machine;
+
+struct {
+  std::mutex mut;
+  std::condition_variable read_cv, write_cv;
+  int notes = 0;
+  bool quit = false;
+} audio;
+
+static void audio_callback(void *userdata, Uint8 *stream, int len) {
+  std::unique_lock<std::mutex> lk(audio.mut);
+
+  audio.read_cv.wait(lk, [&]() {
+    return audio.quit || tsf_active_voice_count(machine.sf) > 0;
+  });
+
+  if (audio.quit)
+    memset(stream, 0, len);
+  else {
+    int sample_count = (len / (2 * sizeof(int16_t))); // 2 output channels
+    tsf_render_short(machine.sf, (int16_t *)stream, sample_count, 0);
+    // machine.audio_buffer.read(stream, len);
+  }
+
+  // audio.write_cv.notify_one();
+}
+
+// void audio_write(const int16_t *frames, size_t num_frames) {
+//   size_t size = num_frames * 2 * sizeof(*frames);
+//   const uint8_t *data = (uint8_t *)frames;
+//   std::unique_lock<std::mutex> lk(audio.mut);
+//   while (size) {
+//     audio.write_cv.wait(lk, [&]() { return !machine.audio_buffer.is_full();
+//     });
+
+//     size_t written = machine.audio_buffer.write(data, size);
+//     data += written;
+//     size -= written;
+
+//     audio.read_cv.notify_one();
+//   }
+// }
+
 int main(int, char *[]) {
   printf("sizeof(Cell) = %zu\n", sizeof(Cell));
 
@@ -113,12 +162,24 @@ int main(int, char *[]) {
       "/home/higor/code/musigrid/libtcod/data/fonts/terminal10x16_gs_tc.png",
       TCOD_FONT_LAYOUT_TCOD);
 
-  Machine machine;
   machine.init(GRID_W, GRID_H);
 
-  TCODConsole::initRoot(machine.grid_w(), machine.grid_h() + 4, "libtcod C++ sample");
+  TCODConsole::initRoot(machine.grid_w(), machine.grid_h() + 4,
+                        "libtcod C++ sample");
   SDL_SetWindowResizable(TCOD_sys_get_sdl_window(), SDL_FALSE);
   atexit(TCOD_quit);
+
+  SDL_Init(SDL_INIT_AUDIO);
+  SDL_AudioSpec spec;
+  spec.channels = 2;
+  spec.freq = 44100;
+  spec.format = AUDIO_S16;
+  spec.samples = 256;
+  spec.callback = audio_callback;
+
+  audio_dev = SDL_OpenAudioDevice(NULL, false, &spec, NULL, 0);
+  SDL_PauseAudioDevice(audio_dev, 0);
+  tsf_set_output(machine.sf, TSF_STEREO_INTERLEAVED, spec.freq, 0);
 
   TCODSystem::setFps(60);
 
@@ -129,8 +190,6 @@ int main(int, char *[]) {
   unsigned ticks = 0;
 
   unsigned speed = 2;
-
-  
 
   while (!TCODConsole::isWindowClosed()) {
     TCOD_event_t ev;
@@ -210,7 +269,10 @@ int main(int, char *[]) {
 
     if (is_tick) {
       ticks++;
+
+      std::unique_lock<std::mutex> lk(audio.mut);
       machine.tick();
+      audio.read_cv.notify_one();
     }
 
     auto root = TCODConsole::root;
@@ -235,7 +297,7 @@ int main(int, char *[]) {
         auto cell = machine.get_cell(x, y);
         char ch = cell->c;
 
-        if (cell->flags & CF_WAS_TICKED)
+        if (cell->flags & CF_WAS_TICKED && cell->c != '#')
           root->putCharEx(x, y, ch, TCODColor::black, TCODColor::cyan);
         else if (cell->flags & CF_WAS_READ)
           root->putCharEx(x, y, ch,
@@ -283,7 +345,8 @@ int main(int, char *[]) {
     root->printf(0, machine.grid_h() + 1, " %10s   %02i,%02i %8uf",
                  machine.cell_descs[cursor.y][cursor.x], cursor.x, cursor.y,
                  ticks);
-    root->printf(0, machine.grid_h() + 2, " %10s   %2s %2s %8u%c", "", "", "", bpm, is_beat ? '*' : ' ');
+    root->printf(0, machine.grid_h() + 2, " %10s   %2s %2s %8u%c", "", "", "",
+                 bpm, is_beat ? '*' : ' ');
 
     TCODConsole::flush();
 

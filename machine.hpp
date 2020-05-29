@@ -1,8 +1,12 @@
 #pragma once
 
 #include <assert.h>
+#include <stddef.h>
+#include <stdlib.h>
 #include <map>
 #include <vector>
+
+#include "TinySoundFont/tsf.h"
 
 static inline char int_to_b36(int v, bool upper) {
   if (upper)
@@ -45,9 +49,17 @@ struct Cell {
   void from_int(int v, bool upper) { c = int_to_b36(v, upper); }
 };
 
+struct Note {
+  int channel;
+  int key;
+  float velocity;
+  int length;
+};
+
 struct Machine {
   std::vector<std::vector<Cell>> cells;
   std::vector<std::vector<const char *>> cell_descs;
+  std::vector<Note> notes;
   std::map<char, const char *> operator_names = {
       {'A', "add"},       {'B', "subtract"}, {'C', "clock"},
       {'D', "delay"},     {'E', "east"},     {'F', "if"},
@@ -62,6 +74,7 @@ struct Machine {
       {'!', "cc"},        {'?', "pb"},       {';', "udp"},
       {'=', "osc"},       {'$', "self"},
   };
+  tsf* sf;
 
   char variables[36];
 
@@ -151,9 +164,10 @@ struct Machine {
       cell->flags |= CF_IS_LOCKED;
   }
 
-  void write_cell(int x, int y, char c) {
+  void write_cell(int x, int y, char c, const char *desc) {
     auto cell = get_cell(x, y);
     if (cell) {
+      cell_descs[y][x] = desc;
       cell->c = c;
       cell->flags |= CF_WAS_WRITTEN;
     }
