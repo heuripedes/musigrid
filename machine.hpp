@@ -1,14 +1,23 @@
 #pragma once
 
 #include <assert.h>
+#include <cctype>
+#include <map>
 #include <stddef.h>
 #include <stdlib.h>
-#include <map>
+#include <string>
 #include <vector>
 
 #include "TinySoundFont/tsf.h"
 
+static inline bool is_b36(char ch) {
+  return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') ||
+         (ch >= 'A' && ch <= 'Z');
+}
+
 static inline char int_to_b36(int v, bool upper) {
+  v %= 36;
+  assert(v >= 0 && v <= 35);
   if (upper)
     return "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"[v % 36];
 
@@ -28,6 +37,19 @@ static inline int b36_to_int(char ch) {
   return -1;
 }
 
+static inline int b36_to_int_fb(char ch, int fallback) {
+  if (ch >= '0' && ch <= '9')
+    return ch - '0';
+
+  if (ch >= 'a' && ch <= 'z')
+    return 10 + ch - 'a';
+
+  if (ch >= 'A' && ch <= 'Z')
+    return 10 + ch - 'A';
+
+  return fallback;
+}
+
 enum CellFlags {
   CF_WAS_TICKED = 1 << 0, // we have already ticked this cell
   CF_WAS_BANGED = 1 << 1, // something banged this cell
@@ -36,10 +58,50 @@ enum CellFlags {
   CF_IS_LOCKED = 1 << 4,
 };
 
+static inline bool is_operator_ch(char ch) {
+  return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '*' ||
+         ch == '#' || ch == ':' || ch == '%' || ch == '!' || ch == '?' ||
+         ch == ';' || ch == '=' || ch == '$';
+}
+
 struct Cell {
-  char c = '.';
+  struct Glyph {
+    char ch;
+
+    Glyph() : ch('.') {}
+
+    Glyph(char c) { operator=(c); }
+
+    Glyph(int c) { operator=(c); }
+
+    Glyph as_upper() const { return Glyph(toupper(ch)); }
+
+    bool valid_c(char c) const {
+      return c == '.' || (c >= '0' && c <= '9') || is_operator_ch(c);
+    }
+
+    operator char() const { return ch; }
+
+    bool operator==(int c) const { return ch == c; }
+
+    bool operator==(char c) const { return ch == c; }
+
+    bool operator>(char c) const { return ch > c; }
+
+    Glyph &operator=(char c) {
+      assert(valid_c(c));
+      if (valid_c(c))
+        ch = c;
+      return *this;
+    }
+  };
+
+  Glyph c = '.';
   unsigned char flags;
-  int to_int() const { return b36_to_int(c); }
+
+  int to_int(int fallback) const {
+    return is_b36(c) ? b36_to_int(c) : fallback;
+  }
   void from_int(int v, bool upper) { c = int_to_b36(v, upper); }
 };
 
@@ -68,11 +130,23 @@ struct Machine {
       {'!', "cc"},        {'?', "pb"},       {';', "udp"},
       {'=', "osc"},       {'$', "self"},
   };
-  tsf* sf;
+  tsf *sf = nullptr;
 
-  char variables[36];
+  Cell::Glyph variables[36];
 
   unsigned ticks = 0;
+
+  Machine() {
+    sf = nullptr;
+  }
+
+  ~Machine() {
+    // if (sf)
+      // tsf_close(sf);
+  }
+
+  bool load_string(const std::string &data);
+  std::string to_string() const;
 
   void init(int width, int height);
   void reset();
@@ -120,7 +194,7 @@ struct Machine {
     return '.';
   }
 
-  void write_locked(int x, int y, char c, const char *desc) {
+  void write_locked(int x, int y, Cell::Glyph c, const char *desc) {
     auto cell = get_cell(x, y);
 
     if (cell) {

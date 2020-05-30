@@ -1,3 +1,5 @@
+#include "machine.hpp"
+
 #include <SDL.h>
 #include <SDL_audio.h>
 #include <assert.h>
@@ -16,7 +18,6 @@
 #include "libtcod/src/libtcod/color.hpp"
 #include "libtcod/src/libtcod/console_printing.h"
 #include "libtcod/src/libtcod/console_types.h"
-#include "machine.hpp"
 
 #define GRID_W 48
 #define GRID_H 15
@@ -213,7 +214,7 @@ int main(int, char *[]) {
           case TCODK_INSERT: {
             auto cur_char = machine.get_cell(cursor.x, cursor.y)->c;
             insert_menu.open(cursor.x, cursor.y,
-                             cur_char == '.' ? 'O' : cur_char);
+                             cur_char == '.' ? Cell::Glyph('O') : cur_char);
             break;
           }
           case TCODK_DELETE:
@@ -310,7 +311,7 @@ int main(int, char *[]) {
 
     if (!insert_menu.is_open) {
       root->putCharEx(cursor.x, cursor.y,
-                      cursor_cell->c == '.' ? '@' : cursor_cell->c,
+                      cursor_cell->c == '.' ? '@' : (char)cursor_cell->c,
                       TCODColor::black, TCODColor::yellow);
     } else {
       int draw_x = insert_menu.pos.x;

@@ -1,8 +1,10 @@
+#define TSF_IMPLEMENTATION
+#include "machine.hpp"
+
 #include <algorithm>
 #include <stdint.h>
-#define TSF_IMPLEMENTATION
+#include <string>
 
-#include "machine.hpp"
 #include <ctype.h>
 #include <stdlib.h>
 
@@ -75,10 +77,49 @@ static int note_octave0_to_key(char note, int octave0) {
   return out;
 }
 
+bool Machine::load_string(const std::string &data) {
+  size_t first_eol = data.find('\n');
+  if (first_eol == std::string::npos && data.empty())
+    return false;
+
+  std::vector<Cell> row;
+  for (unsigned i = 0; i < data.size(); ++i) {
+    if (data[i] == '\n') {
+      cells.push_back(std::move(row));
+      row = std::vector<Cell>();
+    } else {
+      Cell cell;
+      cell.c = data[i];
+      row.push_back(cell);
+    }
+  }
+
+  if (row.size())
+    cells.push_back(std::move(row));
+
+  init(grid_w(), grid_h());
+
+  return true;
+}
+
+std::string Machine::to_string() const {
+  std::string out;
+  for (int y = 0; y < grid_h(); ++y) {
+    for (int x = 0; x < grid_w(); ++x) {
+      out.push_back(cells[y][x].c);
+    }
+    out.push_back('\n');
+  }
+
+  return out;
+}
+
 void Machine::init(int width, int height) {
   if (!sf)
-    sf = tsf_load_filename("/usr/share/soundfonts/FluidR3_GM.sf2");
-    // sf = tsf_load_memory(MinimalSoundFont, sizeof(MinimalSoundFont));
+    //sf = tsf_load_filename("/usr/share/soundfonts/FluidR3_GM.sf2");
+    sf = tsf_load_memory(MinimalSoundFont, sizeof(MinimalSoundFont));
+
+  assert(sf);
 
   for (int i = 0; i < 7; ++i)
     tsf_channel_set_presetnumber(sf, i, 0, 0);
@@ -91,7 +132,7 @@ void Machine::init(int width, int height) {
     row.resize(width);
 #if 0
   const char *data[] = {"..........................................",
-                        ".#.MIDI.#.................................",
+                        ".#.MIDI.example.#.........................",
                         "..........................................",
                         "...wC4....................................",
                         ".gD204TCAFE..################.............",
@@ -138,7 +179,7 @@ void Machine::tick() {
   // tsf_note_off_all(sf);
 
   notes.erase(std::remove_if(notes.begin(), notes.end(),
-                             [&](auto &note) {
+                             [&](Note &note) {
                                auto val = --note.length < 1;
                                if (val)
                                  tsf_channel_note_off(sf, note.channel,
@@ -160,8 +201,8 @@ void Machine::tick() {
       if (cell->flags & CF_WAS_TICKED)
         continue;
 
-      char effective_c =
-          (cell->flags & CF_WAS_BANGED) ? toupper(cell->c) : cell->c;
+      Cell::Glyph effective_c =
+          (cell->flags & CF_WAS_BANGED) ? cell->c.as_upper() : cell->c;
 
       if (effective_c == '.' || islower(effective_c) || isdigit(effective_c) ||
           (cell->flags & CF_IS_LOCKED && effective_c != '*'))
@@ -171,38 +212,42 @@ void Machine::tick() {
 
       cell_descs[y][x] = operator_names[effective_c];
 
-#define DEF_ARITH_BINOP(NAME, OPERATION)                                       \
-  do {                                                                         \
-    char ca = read_cell(x - 1, y, #NAME "-a");                                 \
-    char cb = read_locked(x + 1, y, #NAME "-b");                               \
-    int a = ca == '.' ? 0 : b36_to_int(ca);                                    \
-    int b = cb == '.' ? 0 : b36_to_int(cb);                                    \
-    write_locked(x, y + 1, int_to_b36(a OPERATION b, isupper(cb)),             \
-                 #NAME "-output");                                             \
-  } while (0)
-
       switch (effective_c) {
-      case 'A':
-        DEF_ARITH_BINOP(A, +);
+      case 'A': {
+        char ca = read_cell(x - 1, y, "A-a");
+        char cb = read_locked(x + 1, y, "A-b");
+        int a = b36_to_int_fb(ca, 0);
+        int b = b36_to_int_fb(cb, 0);
+        write_locked(x, y + 1, int_to_b36(a + b, isupper(cb)), "A-output");
         break;
-      case 'B':
-        DEF_ARITH_BINOP(B, -);
+      }
+      case 'B': {
+        char ca = read_cell(x - 1, y, "B-a");
+        char cb = read_locked(x + 1, y, "B-b");
+        int a = b36_to_int_fb(ca, 0);
+        int b = b36_to_int_fb(cb, 0);
+
+        if (b > a)
+          write_locked(x, y + 1, int_to_b36(b - a, isupper(cb)), "B-output");
+        else
+          write_locked(x, y + 1, int_to_b36(a - b, isupper(cb)), "B-output");
         break;
+      }
       case 'C': {
         char ratec = read_cell(x - 1, y, "C-rate");
         char modc = read_locked(x + 1, y, "C-mod");
 
-        int rate = ratec == '.' ? 1 : b36_to_int(ratec);
-        int mod = modc == '.' ? 10 : b36_to_int(modc);
+        int rate = b36_to_int_fb(ratec, 1);
+        int mod = b36_to_int_fb(modc, 10);
 
         if (rate < 1)
           rate = 1;
 
-        if (mod == 0)
+        if (mod < 2)
           write_locked(x, y + 1, '0', "C-output");
         else {
           char resc = peek_cell(x, y + 1);
-          int res = resc == '.' ? 0 : b36_to_int(resc);
+          int res = b36_to_int_fb(resc, 0);
 
           if (ticks % rate == 0)
             res = (res + 1) % mod;
@@ -215,8 +260,8 @@ void Machine::tick() {
         char ratec = read_cell(x - 1, y, "D-rate");
         char modc = read_locked(x + 1, y, "D-mod");
 
-        int rate = ratec == '.' ? 1 : b36_to_int(ratec);
-        int mod = modc == '.' ? 8 : b36_to_int(modc);
+        int rate = b36_to_int_fb(ratec, 1);
+        int mod = b36_to_int_fb(modc, 8);
 
         if (rate < 1)
           rate = 1;
@@ -239,9 +284,9 @@ void Machine::tick() {
         char cy = read_cell(x - 2, y, "G-y");
         char clen = read_cell(x - 1, y, "G-len");
 
-        int x_ = cx == '.' ? 0 : b36_to_int(cx);
-        int y_ = cy == '.' ? 1 : b36_to_int(cy);
-        int len = clen == '.' ? 1 : b36_to_int(clen);
+        int x_ = b36_to_int_fb(cx, 0);
+        int y_ = b36_to_int_fb(cy, 0);
+        int len = b36_to_int_fb(clen, 1);
 
         if (len < 1)
           len = 1;
@@ -265,7 +310,7 @@ void Machine::tick() {
         };
 
         for (int i = 0; i < len; ++i) {
-          write_locked(x + x_ + 1 + i, y + y_,
+          write_locked(x + x_ + i, y + y_ + 1,
                        read_locked(x + 1 + i, y, in_descs[i]), out_descs[i]);
         }
 
@@ -324,9 +369,9 @@ void Machine::tick() {
 
         for (int i = 0; i < len; ++i) {
           char varc = read_locked(x + 1 + i, y, in_descs[i]);
-          int var = b36_to_int(varc);
+          int var = b36_to_int_fb(varc, -1);
 
-          write_locked(x + 1 + i, y + 1, varc >= 0 ? variables[var] : '.',
+          write_locked(x + 1 + i, y + 1, var >= 0 ? variables[var] : Cell::Glyph(),
                        out_descs[i]);
         }
         break;
@@ -341,10 +386,14 @@ void Machine::tick() {
                      "L-output");
         break;
       }
-
-      case 'M':
-        DEF_ARITH_BINOP(M, *);
+      case 'M': {
+        char ca = read_cell(x - 1, y, "M-a");
+        char cb = read_locked(x + 1, y, "M-b");
+        int a = b36_to_int_fb(ca, 0);
+        int b = b36_to_int_fb(cb, 0);
+        write_locked(x, y + 1, int_to_b36(a * b, isupper(cb)), "M-output");
         break;
+      }
       case 'N':
         move_operation(x, y, 0, -1);
         break;
@@ -385,7 +434,7 @@ void Machine::tick() {
         char clen = read_cell(x - 1, y, "Q-len");
 
         int x_ = cx == '.' ? 0 : b36_to_int(cx);
-        int y_ = cy == '.' ? 1 : b36_to_int(cy);
+        int y_ = cy == '.' ? 0 : b36_to_int(cy);
         int len = clen == '.' ? 1 : b36_to_int(clen);
 
         if (len < 1)
@@ -410,19 +459,19 @@ void Machine::tick() {
         };
 
         for (int i = 0; i < len; ++i) {
-          write_locked(x + x_ + 1 + i - len, y + y_,
-                       read_locked(x + 1 + i, y, in_descs[i]), out_descs[i]);
+          write_locked(x + i - len + 1, y + 1,
+                       read_locked(x + x_ + i + 1, y + y_, in_descs[i]), out_descs[i]);
         }
         break;
       }
       case 'R': {
-        char cmin = read_cell(x - 3, y, "R-min");
-        char cmax = read_locked(x - 2, y, "R-max");
+        char cmin = read_cell(x - 1, y, "R-min");
+        char cmax = read_locked(x + 1, y, "R-max");
 
-        int min_ = cmin == '.' ? 0 : b36_to_int(cmin);
-        int max_ = cmax == '.' ? 1 : b36_to_int(cmax);
+        int min_ = b36_to_int_fb(cmin, 0);
+        int max_ = b36_to_int_fb(cmax, 35);
 
-        int res = min_ + (random() / (float)RAND_MAX) * (max_ - min_);
+        int res = min_ + (random() / (float)RAND_MAX) * (max_ - min_ + 1);
         write_locked(x, y + 1, int_to_b36(res, isupper(cmax)), "R-output");
         break;
       }
@@ -503,7 +552,8 @@ void Machine::tick() {
         break;
       }
       case '*': {
-        cell->c = '.';
+        if ((cell->flags & CF_IS_LOCKED) == 0)
+          cell->c = '.';
 
         Cell *neigh[] = {get_cell(x, y - 1), get_cell(x, y + 1),
                          get_cell(x - 1, y), get_cell(x + 1, y)};
