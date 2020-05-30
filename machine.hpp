@@ -50,6 +50,44 @@ static inline int b36_to_int_fb(char ch, int fallback) {
   return fallback;
 }
 
+static int note_octave0_to_key(char note, int octave0) {
+  // clang-format off
+  // Reference:
+  //    https://www.barryrudolph.com/greg/midi.html
+  //    https://newt.phys.unsw.edu.au/jw/notes.html
+  //
+  //                                    A,  B, C, D, E, F, G
+  static const int midi_notes[] =  { 9, 11, 0, 2, 4, 5, 7 };
+  // clang-format on
+
+  bool sharp = islower(note);
+
+  note = toupper(note);
+
+  if (note < 'A' || note > 'Z')
+    return -1;
+
+  // wrap
+  // this is probably wrong. orca's README says:
+  // "The midi operator interprets any letter above the chromatic scale as a
+  // transpose value, for instance 3H, is equivalent to 4A."
+  // also H -> A, I -> B
+  while (note > 'I') {
+    note -= 'I';
+    octave0++;
+  }
+
+  // map H -> A and I -> B
+  if (note > 'G')
+    note -= 'G';
+
+  int out = midi_notes[note - 'A'];
+  out += (octave0 + 1) * 12;
+  out += sharp;
+
+  return out;
+}
+
 enum CellFlags {
   CF_WAS_TICKED = 1 << 0, // we have already ticked this cell
   CF_WAS_BANGED = 1 << 1, // something banged this cell
@@ -132,17 +170,15 @@ struct Machine {
   };
   tsf *sf = nullptr;
 
-  Cell::Glyph variables[36];
+  std::map<Cell::Glyph, Cell::Glyph> variables;
 
   unsigned ticks = 0;
 
-  Machine() {
-    sf = nullptr;
-  }
+  Machine() { sf = nullptr; }
 
   ~Machine() {
     // if (sf)
-      // tsf_close(sf);
+    // tsf_close(sf);
   }
 
   bool load_string(const std::string &data);
@@ -151,6 +187,7 @@ struct Machine {
   void init(int width, int height);
   void reset();
   void tick();
+  void tick_cell(char effective_c, int x, int y, Cell *cell);
 
   int grid_w() const { return cells[0].size(); }
   int grid_h() const { return cells.size(); }

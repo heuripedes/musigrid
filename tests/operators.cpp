@@ -24,7 +24,14 @@ struct OutputCompare {
     *m = from_string(input);
   }
 
+  void create_and_tick() {
+    if (!m)
+      create();
+    m->tick();
+  }
+
   bool output_matches(bool tick = true) {
+
     if (!m)
       create();
 
@@ -609,7 +616,7 @@ TEST(operator_k, one_var) {
                "....\n";
 
   c.create();
-  c.m->variables[b36_to_int('a')] = 'Z';
+  c.m->variables['a'] = 'Z';
 
   EXPECT_TRUE(c.output_matches());
 }
@@ -627,8 +634,8 @@ TEST(operator_k, two_vars) {
                "....\n";
 
   c.create();
-  c.m->variables[b36_to_int('a')] = 'Z';
-  c.m->variables[b36_to_int('x')] = 'C';
+  c.m->variables['a'] = 'Z';
+  c.m->variables['x'] = 'C';
 
   EXPECT_TRUE(c.output_matches());
 }
@@ -646,8 +653,8 @@ TEST(operator_k, two_vars_len2) {
                "....\n";
 
   c.create();
-  c.m->variables[b36_to_int('a')] = 'Z';
-  c.m->variables[b36_to_int('x')] = 'C';
+  c.m->variables['a'] = 'Z';
+  c.m->variables['x'] = 'C';
 
   EXPECT_TRUE(c.output_matches());
 }
@@ -984,4 +991,376 @@ TEST(operator_s, bang_at_something) {
                "...\n";
 
   EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_t, empty) {
+  OutputCompare c;
+  c.input = ".....\n"
+            "..T..\n"
+            ".....\n"
+            ".....";
+  c.expected = ".....\n"
+               "..T..\n"
+               ".....\n"
+               ".....\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_t, only_val) {
+  OutputCompare c;
+  c.input = ".....\n"
+            "..Ta.\n"
+            ".....\n"
+            ".....";
+  c.expected = ".....\n"
+               "..Ta.\n"
+               "..a..\n"
+               ".....\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_t, len0) {
+  OutputCompare c;
+  c.input = ".....\n"
+            ".0Ta.\n"
+            ".....\n"
+            ".....";
+  c.expected = ".....\n"
+               ".0Ta.\n"
+               "..a..\n"
+               ".....\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_t, key1_len2) {
+  OutputCompare c;
+  c.input = ".....\n"
+            "12T.a\n"
+            ".....\n"
+            ".....";
+  c.expected = ".....\n"
+               "12T.a\n"
+               "..a..\n"
+               ".....\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_v, empty) {
+  OutputCompare c;
+  c.input = ".....\n"
+            "..V..\n"
+            ".....\n"
+            ".....";
+  c.expected = ".....\n"
+               "..V..\n"
+               ".....\n"
+               ".....\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_v, write) {
+  OutputCompare c;
+  c.input = ".....\n"
+            ".aV1.\n"
+            ".....\n"
+            ".....";
+  c.expected = ".....\n"
+               ".aV1.\n"
+               ".....\n"
+               ".....\n";
+
+  c.create_and_tick();
+
+  EXPECT_TRUE(c.m->variables.at('a') == '1');
+}
+
+TEST(operator_v, read) {
+  OutputCompare c;
+  c.input = ".....\n"
+            ".aV1.\n"
+            "..Va.\n"
+            ".....";
+  c.expected = ".....\n"
+               ".aV1.\n"
+               "..Va.\n"
+               "..1..\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_w, move) {
+  OutputCompare c;
+  c.input = "...\n"
+            ".W.\n"
+            "...\n"
+            "...";
+  c.expected = "...\n"
+               "W..\n"
+               "...\n"
+               "...\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_w, bang_at_edge) {
+  OutputCompare c;
+  c.input = "...\n"
+            "...\n"
+            "W..\n"
+            "...";
+  c.expected = "...\n"
+               "...\n"
+               "*..\n"
+               "...\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_w, bang_at_something) {
+  OutputCompare c;
+  c.input = "...\n"
+            "1W.\n"
+            "...\n"
+            "...";
+  c.expected = "...\n"
+               "1*.\n"
+               "...\n"
+               "...\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_x, empty) {
+  OutputCompare c;
+  c.input = "....\n"
+            "..X.\n"
+            "....\n"
+            "....";
+  c.expected = "....\n"
+               "..X.\n"
+               "....\n"
+               "....\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_x, empty_with_val) {
+  OutputCompare c;
+  c.input = "....\n"
+            "..Xa\n"
+            "....\n"
+            "....";
+  c.expected = "....\n"
+               "..Xa\n"
+               "..a.\n"
+               "....\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_x, write_1_1) {
+  OutputCompare c;
+  c.input = "....\n"
+            "11Xa\n"
+            "....\n"
+            "....";
+  c.expected = "....\n"
+               "11Xa\n"
+               "....\n"
+               "...a\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_y, some_value) {
+  OutputCompare c;
+  c.input = "...\n"
+            "aY.\n"
+            "...\n"
+            "...";
+
+  c.expected = "...\n"
+               "aYa\n"
+               "...\n"
+               "...\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_z, empty) {
+  OutputCompare c;
+  c.input = "...\n"
+            ".Z.\n"
+            "...\n"
+            "...";
+
+  c.expected = "...\n"
+               ".Z.\n"
+               ".0.\n"
+               "...\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_z, nine) {
+  OutputCompare c;
+  c.input = "...\n"
+            ".Z9\n"
+            "...\n"
+            "...";
+
+  c.expected = "...\n"
+               ".Z9\n"
+               ".1.\n"
+               "...\n";
+
+  EXPECT_TRUE(c.output_matches());
+
+  c.expected = "...\n"
+               ".Z9\n"
+               ".2.\n"
+               "...\n";
+  c.m->tick();
+  EXPECT_TRUE(c.output_matches(false));
+
+  for (int i = 0; i < 10; ++i)
+    c.m->tick();
+
+  c.expected = "...\n"
+               ".Z9\n"
+               ".9.\n"
+               "...\n";
+  EXPECT_TRUE(c.output_matches(false));
+}
+
+TEST(operator_z, nine_by_two) {
+  OutputCompare c;
+  c.input = "...\n"
+            "2Z9\n"
+            "...\n"
+            "...";
+
+  c.expected = "...\n"
+               "2Z9\n"
+               ".2.\n"
+               "...\n";
+
+  EXPECT_TRUE(c.output_matches());
+
+  for (int i = 0; i < 10; ++i)
+    c.m->tick();
+
+  c.expected = "...\n"
+               "2Z9\n"
+               ".9.\n"
+               "...\n";
+  EXPECT_TRUE(c.output_matches(false));
+}
+
+TEST(operator_bang, alone) {
+  OutputCompare c;
+  c.input = "...\n"
+            ".*.\n"
+            "...\n"
+            "...";
+
+  c.expected = "...\n"
+               "...\n"
+               "...\n"
+               "...\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_bang, bangs_others) {
+  OutputCompare c;
+  c.input = "11111\n"
+            "1.n.1\n"
+            "1w*e1\n"
+            "1.s.1\n"
+            "11111";
+
+  c.expected = "11111\n"
+               "1.*.1\n"
+               "1*.*1\n"
+               "1.*.1\n"
+               "11111\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_comment, kill_line) {
+  OutputCompare c;
+  c.input = "*#**";
+
+  c.expected = ".#**\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_comment, begin_end) {
+  OutputCompare c;
+  c.input = "*#*#*";
+
+  c.expected = ".#*#.\n";
+
+  EXPECT_TRUE(c.output_matches());
+}
+
+TEST(operator_midi, empty) {
+  OutputCompare c;
+  c.input = ":.....";
+  c.expected = ":.....\n";
+
+  c.create_and_tick();
+
+  EXPECT_TRUE(c.m->notes.empty());
+}
+
+TEST(operator_midi, banged_full) {
+  OutputCompare c;
+  c.input = "*:12C45";
+  c.expected = ".:12C45\n";
+
+  c.create_and_tick();
+
+  auto note = c.m->notes.front();
+  EXPECT_EQ(note.channel, 1);
+  EXPECT_EQ(note.key, note_octave0_to_key('C', 2));
+  EXPECT_EQ(note.velocity, 4 / 16.0f);
+  EXPECT_EQ(note.length, 5);
+}
+
+TEST(operator_mono, empty) {
+  OutputCompare c;
+  c.input = "%.....";
+  c.expected = "%.....\n";
+
+  c.create_and_tick();
+
+  EXPECT_TRUE(c.m->notes.empty());
+}
+
+TEST(operator_mono, banged_full) {
+  OutputCompare c;
+  c.input = "*%12C45\n"
+            "%12C45.";
+  c.expected = ".%12C45\n"
+               "%12C45.\n";
+
+  c.create_and_tick();
+
+  // mono removes other notes so there should only be one playing
+  EXPECT_EQ(c.m->notes.size(), 1);
+
+  auto note = c.m->notes.front();
+  EXPECT_EQ(note.channel, 1);
+  EXPECT_EQ(note.key, note_octave0_to_key('C', 2));
+  EXPECT_EQ(note.velocity, 4 / 16.0f);
+  EXPECT_EQ(note.length, 5);
 }
