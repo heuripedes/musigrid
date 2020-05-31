@@ -2,6 +2,7 @@
 add_library(musigrid_core OBJECT
   machine.hpp
   machine.cpp
+  system.hpp
   terminal.cpp
   terminal.hpp
   tsf.h

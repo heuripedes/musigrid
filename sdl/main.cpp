@@ -1,5 +1,6 @@
 #include "../core/machine.hpp"
 #include "../core/terminal.hpp"
+#include "../core/system.hpp"
 
 #include <SDL.h>
 #include <SDL_audio.h>
@@ -15,6 +16,7 @@
 #include <stdint.h>
 #include <thread>
 #include <vector>
+
 
 
 #define GRID_W (640 / 8)
@@ -410,16 +412,17 @@ int main(int, char *[]) {
       }
     }
 
-    term.clear();
+    machine.run();
+
 
     static int frames = 0;
     frames++;
 
-    machine.run();
 
     audio_write((uint8_t *)machine.audio_samples.data(),
                 machine.audio_samples.size() * sizeof(int16_t));
 
+    term.clear();
     draw();
 
     uint8_t *pixels = nullptr;
