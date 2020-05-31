@@ -86,6 +86,8 @@ void Machine::init(int width, int height) {
   for (int i = 0; i < 7; ++i)
     tsf_channel_set_presetnumber(sf, i, 0, 0);
 
+  tsf_set_output(sf, TSF_STEREO_INTERLEAVED, 44100, 0);
+
   cells.resize(height);
   cell_descs.resize(height);
   for (auto &row : cells)
@@ -612,9 +614,9 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
                   notes.end());
 
       notes.push_back(n);
-      printf("%c + %i -> %i\n", notec, octave, n.key);
+      // printf("%c + %i -> %i\n", notec, octave, n.key);
       tsf_channel_note_on(sf, n.channel, n.key, n.velocity);
-      // tsf_channel_set_pan(sf, n.channel, ticks % 2 == 0);
+      tsf_channel_set_pan(sf, n.channel, ticks % 2 == 0);
     }
     break;
   }

@@ -1,33 +1,30 @@
 #include "machine.hpp"
 
 #include <SDL.h>
-#include <SDL_audio.h>
 #include <assert.h>
 #include <cctype>
 #include <cfloat>
 #include <condition_variable>
 #include <cstdlib>
+#include <ctype.h>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <stdint.h>
 #include <vector>
 
-#include "libtcod/src/libtcod.hpp"
+#include "terminal.hpp"
 
-#include "libtcod/src/libtcod/color.hpp"
-#include "libtcod/src/libtcod/console_printing.h"
-#include "libtcod/src/libtcod/console_types.h"
-
-#define GRID_W 48
-#define GRID_H 15
+#define GRID_W (640 / 8)
+#define GRID_H ((480 / 16) - 2)
 
 struct Point {
-  int x{0}, y{0};
+  int x, y;
+  Point() = default;
 };
 
 #define ALPHABET "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ*#:%!?;=$."
-static Point cursor = {GRID_W / 2, GRID_H / 2};
+static Point cursor = Point{GRID_W / 2, GRID_H / 2};
 static char cursor_char = sizeof(ALPHABET) - 1;
 static struct {
   bool is_open = false;
@@ -95,22 +92,10 @@ static struct {
 
 } insert_menu;
 
-void print(TCODConsole *cons, int x, int y, const char *str, TCODColor fg,
-           TCODColor bg) {
-  int tx = x;
-  int ty = y;
-  while (*str) {
-    if (*str == '\n') {
-      tx = x;
-      ty++;
-    }
-    cons->putCharEx(tx++, ty, *str++, fg, bg);
-  }
-}
-
 SDL_AudioDeviceID audio_dev;
 
 Machine machine;
+Terminal term;
 
 struct {
   std::mutex mut;
@@ -134,30 +119,101 @@ static void audio_callback(void *userdata, Uint8 *stream, int len) {
   }
 }
 
-int main(int, char *[]) {
-  printf("sizeof(Cell) = %zu\n", sizeof(Cell));
-
-  TCOD_key_t key = {TCODK_NONE, 0};
-  TCOD_mouse_t mouse;
-
-  TCODConsole::setCustomFont(
-      "/home/higor/code/musigrid/libtcod/data/fonts/terminal10x16_gs_tc.png",
-      TCOD_FONT_LAYOUT_TCOD);
+static void init() {
+  term.configure(GRID_W, GRID_H + 2);
+  term.set_font("unscii16");
+  term.fg = 1;
+  term.bg = 0;
 
   machine.init(GRID_W, GRID_H);
+}
 
-  TCODConsole::initRoot(machine.grid_w(), machine.grid_h() + 2,
-                        "libtcod C++ sample");
-  SDL_SetWindowResizable(TCOD_sys_get_sdl_window(), SDL_FALSE);
-  {
-    int ww;
-    int wh;
-    SDL_GetWindowSize(TCOD_sys_get_sdl_window(), &ww, &wh);
-    printf("window size is %ix%i\n", ww, wh);
+static void draw(unsigned bpm, bool is_beat) {
+  // draw grid
+  for (int y = 0; y < GRID_H; ++y) {
+    for (int x = 0; x < GRID_W; ++x) {
+      if (x % 10 == 0 && y % 10 == 0)
+        term.putc('+', x, y, 5, 0);
+      else if (x % 2 == 0 && y % 2 == 0)
+        term.putc('.', x, y, 5, 0);
+      else
+        term.putc(' ', x, y, 1, 0);
+    }
   }
-  atexit(TCOD_quit);
 
-  SDL_Init(SDL_INIT_AUDIO);
+  auto cursor_cell = machine.get_cell(cursor.x, cursor.y);
+
+  for (int y = 0; y < machine.grid_h(); ++y) {
+    for (int x = 0; x < machine.grid_w(); ++x) {
+      auto cell = machine.get_cell(x, y);
+      char ch = cell->c;
+
+      if (cursor_cell->c == cell->c && cell->c != '.') {
+        term.putc(ch, x, y, 7, 0);
+        continue;
+      }
+
+      if (cell->flags & CF_WAS_TICKED)
+        term.putc(ch, x, y, 0, 6);
+      else if (cell->flags & CF_WAS_READ)
+        term.putc(ch, x, y, (cell->flags & CF_IS_LOCKED) ? 1 : 6, 0);
+      else if (cell->flags & CF_WAS_WRITTEN)
+        term.putc(ch, x, y, 0, 1);
+      else if (ch != '.' || cell->flags & CF_IS_LOCKED)
+        term.putc(ch, x, y, (cell->flags & CF_WAS_READ) ? 1 : 3, 0);
+    }
+  }
+
+  if (!insert_menu.is_open) {
+    term.putc(cursor_cell->c == '.' ? '@' : (char)cursor_cell->c, cursor.x,
+              cursor.y, 0, 7);
+  } else {
+    int draw_x = insert_menu.pos.x;
+    int draw_y = insert_menu.pos.y;
+
+    term.fg = 6;
+    term.bg = 7;
+    term.print(draw_x, draw_y++, "INS -");
+
+    term.reset_color();
+
+    for (int y = 0; y < insert_menu.items_rows(); ++y) {
+      for (int x = 0; x < insert_menu.items_cols(); ++x) {
+        char c = insert_menu.ucase ? toupper(insert_menu.items[y][x])
+                                   : tolower(insert_menu.items[y][x]);
+
+        if (x == insert_menu.cursor.x && y == insert_menu.cursor.y) {
+          term.fg = 7;
+          term.bg = 0;
+        } else {
+          term.fg = 1;
+          term.bg = 3;
+        }
+
+        term.putc(c, draw_x + x, draw_y + y);
+      }
+    }
+  }
+
+  term.reset_color();
+  term.print(0, machine.grid_h() + 0, " %10s   %02i,%02i %8uf",
+             machine.cell_descs[cursor.y][cursor.x], cursor.x, cursor.y,
+             machine.ticks);
+  term.print(0, machine.grid_h() + 1, " %10s   %2s %2s %8u%c", "", "", "", bpm,
+             is_beat ? '*' : ' ');
+}
+
+int main(int, char *[]) {
+  SDL_Init(SDL_INIT_EVERYTHING);
+
+  SDL_Window *window;
+  SDL_Renderer *renderer;
+  SDL_CreateWindowAndRenderer(640, 480, 0, &window, &renderer);
+
+  SDL_Texture *texture =
+      SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                        SDL_TEXTUREACCESS_STREAMING, 640, 480);
+
   SDL_AudioSpec spec;
   spec.channels = 2;
   spec.freq = 44100;
@@ -167,73 +223,78 @@ int main(int, char *[]) {
 
   audio_dev = SDL_OpenAudioDevice(NULL, false, &spec, NULL, 0);
   SDL_PauseAudioDevice(audio_dev, 0);
-  tsf_set_output(machine.sf, TSF_STEREO_INTERLEAVED, spec.freq, 0);
 
-  TCODSystem::setFps(60);
+  init();
 
-  float secs_then = TCODSystem::getElapsedSeconds();
+  bool running = true;
+  bool first_frame = true;
+
+  float secs_then = SDL_GetTicks() / 1000.0f;
   float secs_acc = 0;
 
   unsigned frames = 0;
-  unsigned ticks = 0;
 
   unsigned speed = 2;
 
-  while (!TCODConsole::isWindowClosed()) {
-    TCOD_event_t ev;
-
-    float secs_now = TCODSystem::getElapsedSeconds();
+  while (running) {
+    float secs_now = SDL_GetTicks() / 1000.0f;
     float delta = secs_now - secs_then;
     secs_then = secs_now;
     secs_acc += delta;
 
-    while ((ev = TCODSystem::checkForEvent(TCOD_EVENT_ANY, &key, &mouse)) !=
-           TCOD_EVENT_NONE) {
-      switch (ev) {
-      case TCOD_EVENT_KEY_PRESS: {
+    SDL_Event ev;
+    while (SDL_PollEvent(&ev)) {
+      switch (ev.type) {
+      case SDL_KEYDOWN: {
+        auto key = ev.key.keysym;
         if (insert_menu.is_open == false) {
           Point p = cursor;
-          p.x += (key.vk == TCODK_RIGHT) - (key.vk == TCODK_LEFT);
-          p.y += (key.vk == TCODK_DOWN) - (key.vk == TCODK_UP);
+          p.x += (key.scancode == SDL_SCANCODE_RIGHT) -
+                 (key.scancode == SDL_SCANCODE_LEFT);
+          p.y += (key.scancode == SDL_SCANCODE_DOWN) -
+                 (key.scancode == SDL_SCANCODE_UP);
 
           if (machine.is_valid(p.x, p.y))
             cursor = p;
 
-          cursor_char += (key.vk == TCODK_PAGEUP) - (key.vk == TCODK_PAGEDOWN);
+          cursor_char += (key.scancode == SDL_SCANCODE_PAGEUP) -
+                         (key.scancode == SDL_SCANCODE_PAGEDOWN);
           cursor_char %= sizeof(ALPHABET);
         } else {
-          insert_menu.move_cursor(
-              (key.vk == TCODK_RIGHT) - (key.vk == TCODK_LEFT),
-              (key.vk == TCODK_DOWN) - (key.vk == TCODK_UP));
+          insert_menu.move_cursor((key.scancode == SDL_SCANCODE_RIGHT) -
+                                      (key.scancode == SDL_SCANCODE_LEFT),
+                                  (key.scancode == SDL_SCANCODE_DOWN) -
+                                      (key.scancode == SDL_SCANCODE_UP));
         }
         break;
       }
-      case TCOD_EVENT_KEY_RELEASE: {
+      case SDL_KEYUP: {
+        auto key = ev.key.keysym;
         if (insert_menu.is_open == false) {
-          switch (key.vk) {
-          case TCODK_INSERT: {
+          switch (key.scancode) {
+          case SDL_SCANCODE_INSERT: {
             auto cur_char = machine.get_cell(cursor.x, cursor.y)->c;
             insert_menu.open(cursor.x, cursor.y,
                              cur_char == '.' ? Cell::Glyph('O') : cur_char);
             break;
           }
-          case TCODK_DELETE:
+          case SDL_SCANCODE_DELETE:
             machine.new_cell(cursor.x, cursor.y, '.');
             break;
           default:
             break;
           }
         } else {
-          switch (key.vk) {
-          case TCODK_DELETE:
+          switch (key.scancode) {
+          case SDL_SCANCODE_DELETE:
             insert_menu.cancel();
             break;
-          case TCODK_ENTER:
-          case TCODK_INSERT:
+          case SDL_SCANCODE_RETURN:
+          case SDL_SCANCODE_INSERT:
             machine.new_cell(cursor.x, cursor.y, insert_menu.accept());
             break;
-          case TCODK_PAGEDOWN:
-          case TCODK_PAGEUP:
+          case SDL_SCANCODE_PAGEDOWN:
+          case SDL_SCANCODE_PAGEUP:
             insert_menu.toggle_case();
             break;
           default:
@@ -242,10 +303,15 @@ int main(int, char *[]) {
         }
         break;
       }
-      default:
-        break;
+      case SDL_QUIT:
+        goto break_main_loop;
       }
     }
+
+    if (!first_frame) {
+      term.clear();
+    }
+    first_frame = false;
 
     unsigned bpm = speed * 60;
 
@@ -256,95 +322,29 @@ int main(int, char *[]) {
       secs_acc -= (60 / (float)bpm);
 
     if (is_tick) {
-      ticks++;
-
       std::unique_lock<std::mutex> lk(audio.mut);
       machine.tick();
+
+      lk.unlock();
       audio.read_cv.notify_one();
     }
 
-    auto root = TCODConsole::root;
-    root->clear();
+    draw(bpm, is_beat);
 
-    // draw grid
-    for (int y = 0; y < GRID_H; ++y) {
-      for (int x = 0; x < GRID_W; ++x) {
-        if (x % 10 == 0 && y % 10 == 0)
-          root->putCharEx(x, y, '+', TCODColor::darkestGrey, TCODColor::black);
-        else if (x % 2 == 0 && y % 2 == 0)
-          root->putCharEx(x, y, '.', TCODColor::darkestGrey, TCODColor::black);
-        else
-          root->putCharEx(x, y, '.', root->getDefaultBackground(),
-                          root->getDefaultBackground());
-      }
-    }
+    uint8_t *pixels = nullptr;
+    int pitch;
 
-    // render chars
-    auto cursor_cell = machine.get_cell(cursor.x, cursor.y);
+    SDL_LockTexture(texture, NULL, (void **)&pixels, &pitch);
+    term.draw_buffer(pixels, pitch);
+    SDL_UnlockTexture(texture);
 
-    for (int y = 0; y < machine.grid_h(); ++y) {
-      for (int x = 0; x < machine.grid_w(); ++x) {
-        auto cell = machine.get_cell(x, y);
-        char ch = cell->c;
+    SDL_RenderCopy(renderer, texture, NULL, NULL);
+    SDL_RenderPresent(renderer);
 
-        if (cursor_cell->c == cell->c && cell->c != '.') {
-          root->putCharEx(x, y, ch, TCODColor::orange, TCODColor::black);
-          continue;
-        }
-
-        if (cell->flags & CF_WAS_TICKED)
-          root->putCharEx(x, y, ch, TCODColor::black, TCODColor::cyan);
-        else if (cell->flags & CF_WAS_READ)
-          root->putCharEx(x, y, ch,
-                          (cell->flags & CF_IS_LOCKED) ? TCODColor::white
-                                                       : TCODColor::cyan,
-                          root->getDefaultBackground());
-        else if (cell->flags & CF_WAS_WRITTEN)
-          root->putCharEx(x, y, ch, TCODColor::black, TCODColor::white);
-        else if (ch != '.' || cell->flags & CF_IS_LOCKED)
-          root->putCharEx(x, y, ch,
-                          (cell->flags & CF_WAS_READ) ? TCODColor::white
-                                                      : TCODColor::grey,
-                          root->getDefaultBackground());
-      }
-    }
-
-    if (!insert_menu.is_open) {
-      root->putCharEx(cursor.x, cursor.y,
-                      cursor_cell->c == '.' ? '@' : (char)cursor_cell->c,
-                      TCODColor::black, TCODColor::yellow);
-    } else {
-      int draw_x = insert_menu.pos.x;
-      int draw_y = insert_menu.pos.y;
-
-      print(root, draw_x, draw_y++, "INS -", TCODColor::yellow,
-            TCODColor::blue);
-
-      for (int y = 0; y < insert_menu.items_rows(); ++y) {
-        for (int x = 0; x < insert_menu.items_cols(); ++x) {
-          char c = insert_menu.ucase ? toupper(insert_menu.items[y][x])
-                                     : tolower(insert_menu.items[y][x]);
-
-          root->putChar(draw_x + x, draw_y + y, c);
-          if (x == insert_menu.cursor.x && y == insert_menu.cursor.y) {
-            root->setCharBackground(draw_x + x, draw_y + y, TCODColor::yellow);
-            root->setCharForeground(draw_x + x, draw_y + y, TCODColor::black);
-          } else
-            root->setCharBackground(draw_x + x, draw_y + y, TCODColor::grey);
-        }
-      }
-    }
-
-    root->printf(0, machine.grid_h() + 0, " %10s   %02i,%02i %8uf",
-                 machine.cell_descs[cursor.y][cursor.x], cursor.x, cursor.y,
-                 ticks);
-    root->printf(0, machine.grid_h() + 1, " %10s   %2s %2s %8u%c", "", "", "",
-                 bpm, is_beat ? '*' : ' ');
-
-    TCODConsole::flush();
-
-    frames++;
+    SDL_Delay(1000 / 30);
   }
+break_main_loop:
+  running = false;
 
   {
     std::unique_lock<std::mutex> lk(audio.mut);
@@ -354,6 +354,10 @@ int main(int, char *[]) {
     SDL_PauseAudioDevice(audio_dev, true);
   }
 
-  TCOD_quit();
+  SDL_DestroyTexture(texture);
+  SDL_DestroyRenderer(renderer);
+  SDL_DestroyWindow(window);
+  SDL_Quit();
+
   return 0;
 }
