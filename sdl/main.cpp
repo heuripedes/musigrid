@@ -1,4 +1,5 @@
-#include "machine.hpp"
+#include "../core/machine.hpp"
+#include "../core/terminal.hpp"
 
 #include <SDL.h>
 #include <SDL_audio.h>
@@ -15,7 +16,6 @@
 #include <thread>
 #include <vector>
 
-#include "terminal.hpp"
 
 #define GRID_W (640 / 8)
 #define GRID_H ((480 / 16) - 2)
@@ -239,7 +239,7 @@ static void init() {
   machine.init(GRID_W, GRID_H);
 }
 
-static void draw(unsigned bpm, bool is_beat) {
+static void draw() {
   // draw grid
   for (int y = 0; y < GRID_H; ++y) {
     for (int x = 0; x < GRID_W; ++x) {
@@ -310,8 +310,8 @@ static void draw(unsigned bpm, bool is_beat) {
   term.print(0, machine.grid_h() + 0, " %10s   %02i,%02i %8uf",
              machine.cell_descs[cursor.y][cursor.x], cursor.x, cursor.y,
              machine.ticks);
-  term.print(0, machine.grid_h() + 1, " %10s   %2s %2s %8u%c", "", "", "", bpm,
-             is_beat ? '*' : ' ');
+  term.print(0, machine.grid_h() + 1, " %10s   %2s %2s %8u%c", "", "", "", machine.bpm,
+             machine.ticks % 4 == 0 ? '*' : ' ');
 }
 
 int main(int, char *[]) {
@@ -342,8 +342,6 @@ int main(int, char *[]) {
   audio.buffer.storage.resize(spec.size);
 
   bool running = true;
-
-  int bpm = 120;
 
   while (running) {
     SDL_Event ev;
@@ -422,7 +420,7 @@ int main(int, char *[]) {
     audio_write((uint8_t *)machine.audio_samples.data(),
                 machine.audio_samples.size() * sizeof(int16_t));
 
-    draw(machine.bpm, false);
+    draw();
 
     uint8_t *pixels = nullptr;
     int pitch;
@@ -433,8 +431,6 @@ int main(int, char *[]) {
 
     SDL_RenderCopy(renderer, texture, NULL, NULL);
     SDL_RenderPresent(renderer);
-
-    // std::this_thread::sleep_for(std::chrono::milliseconds(1000 / 60));
   }
 break_main_loop:
   running = false;

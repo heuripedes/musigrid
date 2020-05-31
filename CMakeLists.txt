@@ -1,76 +1,45 @@
-cmake_minimum_required(VERSION 3.17)
-project(musigrid CXX ASM)
+cmake_minimum_required(VERSION 3.12)
+project(musigrid VERSION 0.1 LANGUAGES CXX ASM)
 
 enable_testing()
 add_subdirectory(googletest)
 
-set(OpenGL_GL_PREFERENCE "GLVND")
-find_package(PkgConfig)
-find_package(SDL2 CONFIG REQUIRED)
-include(CheckCXXCompilerFlag)
-
-pkg_check_modules(SFML sfml-all)
 
 set(SANITIZER "address")
-add_subdirectory(tests)
+# add_subdirectory(tests)
+add_subdirectory(data)
+add_subdirectory(core)
 
-add_library(musigrid-core
-  machine.hpp
-  machine.cpp
-  terminal.cpp
-  terminal.hpp
-  data/data.s
 
-  tsf.h
-  stb_image.h
-)
+if(MUSIGRID_SDL)
+  message(STATUS "Will compile musigrid_sdl")
+  find_package(SDL2 CONFIG REQUIRED)
 
-file(GLOB DATA_FILES ${CMAKE_SOURCE_DIR}/data/*.png)
-set_source_files_properties(data/data.s PROPERTIES
-  COMPILE_FLAGS "-I${CMAKE_SOURCE_DIR}/data"
-  OBJECT_DEPENDS ${DATA_FILES}
-)
-unset(DATA_FILES)
-
-if (MSVC)
-else()
-  check_cxx_compiler_flag(-Wduplicated-cond WDUPLICATED_COND)
-  check_cxx_compiler_flag(-Wduplicated-branches WDUPLICATED_BRANCHES)
-  check_cxx_compiler_flag(WLOGICAL_OP  -Wlogical-op)
-  check_cxx_compiler_flag(-Wnull-dereference WNULL_DEREFERENCE)
-
-  target_compile_options(musigrid-core PRIVATE -Wall
-    $<$<BOOL:WDUPLICATED_COND>:-Wduplicated-cond>
-    $<$<BOOL:WDUPLICATED_BRANCHES>:-Wduplicated-branches>
-    $<$<BOOL:WLOGICAL_OP>:-Wlogical-op>
-    $<$<BOOL:WNULL_DEREFERENCE>:-Wnull-dereference>
+  add_executable(musigrid_sdl
+    sdl/main.cpp
   )
-endif()
 
-# add_subdirectory(libtcod/src)
-
-set_target_properties(musigrid-core PROPERTIES CXX_STANDARD 11 CXX_EXTENSIONS OFF)
-target_link_libraries(musigrid-core PRIVATE
+  set_target_properties(musigrid_sdl PROPERTIES CXX_STANDARD 11 CXX_EXTENSIONS OFF)
+  target_link_libraries(musigrid_sdl PRIVATE
+    musigrid_core
+    SDL2::SDL2
+    ${CMAKE_DL_LIBS}
   )
-# target_link_options(musigrid-core PUBLIC
-#   -Wl,--format=binary -Wl,data/font_10x16.bmp -Wl,--format=default)
 
+  if (MSVC)
+    if (NOT SANITIZER STREQUAL "")
+      target_link_libraries(musigrid_sdl PRIVATE /fsanitize=${SANITIZER})
+      target_compile_options(musigrid_sdl PRIVATE /fsanitize=${SANITIZER})
+    endif()
+  else()
+    target_compile_options(musigrid_sdl PRIVATE -Wall -Wpedantic)
 
-add_executable(musigrid
-  main.cpp
-)
+    if (NOT SANITIZER STREQUAL "")
+      target_compile_options(musigrid_sdl PRIVATE -fno-omit-frame-pointer -fno-common)
+      target_link_libraries(musigrid_sdl PRIVATE -fno-omit-frame-pointer -fno-common)
 
-set_target_properties(musigrid PROPERTIES CXX_STANDARD 11 CXX_EXTENSIONS OFF)
-
-# target_link_libraries(musigrid PRIVATE musigrid-core  LIBTCOD::LIBTCOD SDL2::SDL2 ${SFML_LIBRARIES} ${CMAKE_DL_LIBS})
-target_link_libraries(musigrid PRIVATE musigrid-core SDL2::SDL2 ${CMAKE_DL_LIBS}
-)
-target_include_directories(musigrid PRIVATE  ${SFML_INCLUDE_DIRS})
-
-if (NOT SANITIZER STREQUAL "")
-  target_link_libraries(musigrid PRIVATE -fsanitize=${SANITIZER})
-  target_compile_options(musigrid PRIVATE -fsanitize=${SANITIZER})
-
-  target_link_libraries(musigrid-core PRIVATE -fsanitize=${SANITIZER})
-  target_compile_options(musigrid-core PRIVATE -fsanitize=${SANITIZER})
+      target_link_libraries(musigrid_sdl PUBLIC -fsanitize=${SANITIZER})
+      target_compile_options(musigrid_sdl PUBLIC -fsanitize=${SANITIZER})
+    endif()
+  endif()
 endif()

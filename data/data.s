@@ -1,4 +1,4 @@
-.include "defdata.s"
+.include "defdata.inc"
 
 DEFDATA unscii8, unscii8.png
 DEFDATA unscii8_alt, unscii8_alt.png
