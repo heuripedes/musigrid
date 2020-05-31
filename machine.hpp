@@ -81,8 +81,10 @@ static int note_octave0_to_key(char note, int octave0) {
   if (note > 'G')
     note -= 'G';
 
+  int octave = octave0 + 2; // midi starts at -2
+
   int out = midi_notes[note - 'A'];
-  out += (octave0 + 1) * 12;
+  out += octave * 12;
   out += sharp;
 
   return out;
