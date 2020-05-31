@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.12)
 project(musigrid VERSION 0.1 LANGUAGES CXX ASM)
 
 
-set(SANITIZER "address")
+set(SANITIZER "")
 
 enable_testing()
 add_subdirectory(googletest)
