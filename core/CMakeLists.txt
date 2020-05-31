@@ -1,5 +1,5 @@
 
-add_library(musigrid_core
+add_library(musigrid_core OBJECT
   machine.hpp
   machine.cpp
   terminal.cpp

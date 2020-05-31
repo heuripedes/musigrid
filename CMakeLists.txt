@@ -1,15 +1,32 @@
 cmake_minimum_required(VERSION 3.12)
 project(musigrid VERSION 0.1 LANGUAGES CXX ASM)
 
-enable_testing()
-add_subdirectory(googletest)
-
 
 set(SANITIZER "address")
-# add_subdirectory(tests)
+
+enable_testing()
+add_subdirectory(googletest)
+add_subdirectory(tests)
+
 add_subdirectory(data)
 add_subdirectory(core)
 
+if (MUSIGRID_LIBRETRO)
+  message(STATUS "Will compile musigrid_libretro")
+
+  if (BUILD_SHARED_LIBS)
+    message(WARNING "musigrid_core will use position independent code (potentially slower)")
+    set_property(TARGET musigrid_core PROPERTY POSITION_INDEPENDENT_CODE 1)
+  endif()
+
+  add_library(musigrid_libretro
+    libretro/libretro.cpp
+    libretro/libretro.h
+  )
+
+  target_compile_options(musigrid_libretro PRIVATE -Wall -Wpedantic)
+  target_link_libraries(musigrid_libretro PRIVATE musigrid_core)
+endif()
 
 if(MUSIGRID_SDL)
   message(STATUS "Will compile musigrid_sdl")
@@ -26,20 +43,4 @@ if(MUSIGRID_SDL)
     ${CMAKE_DL_LIBS}
   )
 
-  if (MSVC)
-    if (NOT SANITIZER STREQUAL "")
-      target_link_libraries(musigrid_sdl PRIVATE /fsanitize=${SANITIZER})
-      target_compile_options(musigrid_sdl PRIVATE /fsanitize=${SANITIZER})
-    endif()
-  else()
-    target_compile_options(musigrid_sdl PRIVATE -Wall -Wpedantic)
-
-    if (NOT SANITIZER STREQUAL "")
-      target_compile_options(musigrid_sdl PRIVATE -fno-omit-frame-pointer -fno-common)
-      target_link_libraries(musigrid_sdl PRIVATE -fno-omit-frame-pointer -fno-common)
-
-      target_link_libraries(musigrid_sdl PUBLIC -fsanitize=${SANITIZER})
-      target_compile_options(musigrid_sdl PUBLIC -fsanitize=${SANITIZER})
-    endif()
-  endif()
 endif()
