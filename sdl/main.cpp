@@ -177,7 +177,7 @@ int main(int, char *[]) {
   SDL_CreateWindowAndRenderer(640, 480, 0, &window, &renderer);
 
   SDL_Texture *texture =
-      SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+      SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
                         SDL_TEXTUREACCESS_STREAMING, 640, 480);
 
   // init();
@@ -201,7 +201,7 @@ int main(int, char *[]) {
 
   while (running) {
     SDL_Event ev;
-    System::Input input{false};
+    System::Input input;
     while (SDL_PollEvent(&ev)) {
       switch (ev.type) {
       case SDL_KEYDOWN:

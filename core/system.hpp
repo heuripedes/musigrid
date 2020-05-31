@@ -18,10 +18,9 @@ struct System {
   };
 
   struct Input {
-    bool up, down, left, right;
-    bool ins, del, pgup, pgdown;
-    bool enter, backspace;
-    Input() = default;
+    bool up = false, down = false, left = false, right = false;
+    bool ins = false, del = false, pgup = false, pgdown = false;
+    bool enter = false, backspace = false;
 
     Input get_pressed(const Input &prev) const {
       Input out;

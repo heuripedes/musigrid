@@ -138,7 +138,7 @@ void Terminal::draw_buffer(uint8_t *out, size_t out_pitch) {
       // fast path for empty space
       if (src_x == 0 && src_y == 0) {
         for (int cy = 0; cy < char_h; ++cy) {
-          const uint8_t bg_color[] = {255, bg.b, bg.g, bg.r};
+          const uint8_t bg_color[] = {bg.b, bg.g, bg.r, 255};
           uint32_t pixel = *(uint32_t*)bg_color;
           uint32_t *dst = (uint32_t*)(
               out + (dst_y + cy) * out_pitch + dst_x * sizeof(uint32_t));
@@ -153,8 +153,6 @@ void Terminal::draw_buffer(uint8_t *out, size_t out_pitch) {
               out + (dst_y + cy) * out_pitch + dst_x * sizeof(uint32_t);
 
           for (int cx = 0; cx < char_w; ++cx) {
-            *dst++ = 255;
-
             // drawing background is the most common case.
             if (!*src) {
               *dst++ = bg.b;
@@ -165,6 +163,7 @@ void Terminal::draw_buffer(uint8_t *out, size_t out_pitch) {
               *dst++ = fg.g;
               *dst++ = fg.r;
             }
+            *dst++ = 255;
 
             src += 4;
           }

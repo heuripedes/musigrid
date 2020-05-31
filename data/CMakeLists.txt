@@ -1,5 +1,5 @@
 
-add_library(musigrid_data
+add_library(musigrid_data OBJECT
   data.s
 )
 
