@@ -106,8 +106,8 @@ void Terminal::putcs(int x, int y, const char *str) {
 }
 
 void Terminal::draw_buffer(uint8_t *out, size_t out_pitch) {
-  int out_cols = (out_pitch / sizeof(uint32_t)) / char_w;
-  int font_pitch = font_w * sizeof(uint32_t);
+  const int out_cols = (out_pitch / sizeof(uint32_t)) / char_w;
+  const int font_pitch = font_w * sizeof(uint32_t);
 
   for (int cell_y = 0; cell_y < rows; ++cell_y) {
     for (int cell_x = 0; cell_x < cols && cell_x < out_cols; ++cell_x) {
@@ -123,22 +123,22 @@ void Terminal::draw_buffer(uint8_t *out, size_t out_pitch) {
 
       ch = ch - ' ';
 
-      int char_row = ch / 32;
-      int char_col = ch % 32;
+      const int char_row = ch / 32;
+      const int char_col = ch % 32;
 
-      int dst_x = cell_x * char_w;
-      int dst_y = cell_y * char_h;
+      const int dst_x = cell_x * char_w;
+      const int dst_y = cell_y * char_h;
 
-      int src_x = char_col * char_w;
-      int src_y = char_row * char_h;
+      const int src_x = char_col * char_w;
+      const int src_y = char_row * char_h;
 
-      auto fg = colors[cell.fg];
-      auto bg = colors[cell.bg];
+      const auto fg = colors[cell.fg];
+      const auto bg = colors[cell.bg];
 
       // fast path for empty space
       if (src_x == 0 && src_y == 0) {
         for (int cy = 0; cy < char_h; ++cy) {
-          uint8_t bg_color[] = {255, bg.b, bg.g, bg.r};
+          const uint8_t bg_color[] = {255, bg.b, bg.g, bg.r};
           uint32_t pixel = *(uint32_t*)bg_color;
           uint32_t *dst = (uint32_t*)(
               out + (dst_y + cy) * out_pitch + dst_x * sizeof(uint32_t));
@@ -147,21 +147,23 @@ void Terminal::draw_buffer(uint8_t *out, size_t out_pitch) {
         }
       } else {
         for (int cy = 0; cy < char_h; ++cy) {
-          uint8_t *src =
+          const uint8_t *src =
               font + (src_y + cy) * font_pitch + src_x * sizeof(uint32_t);
           uint8_t *dst =
               out + (dst_y + cy) * out_pitch + dst_x * sizeof(uint32_t);
 
           for (int cx = 0; cx < char_w; ++cx) {
             *dst++ = 255;
-            if (*src) {
-              *dst++ = fg.b;
-              *dst++ = fg.g;
-              *dst++ = fg.r;
-            } else {
+
+            // drawing background is the most common case.
+            if (!*src) {
               *dst++ = bg.b;
               *dst++ = bg.g;
               *dst++ = bg.r;
+            } else {
+              *dst++ = fg.b;
+              *dst++ = fg.g;
+              *dst++ = fg.r;
             }
 
             src += 4;
