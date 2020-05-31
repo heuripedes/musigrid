@@ -8,8 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "TinySoundFont/tsf.h"
-
 static inline bool is_b36(char ch) {
   return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') ||
          (ch >= 'A' && ch <= 'Z');
@@ -110,9 +108,9 @@ struct Cell {
 
     Glyph() : ch('.') {}
 
-    Glyph(char c) { operator=(c); }
+    Glyph(char c) : ch('.') { operator=(c); }
 
-    Glyph(int c) { operator=(c); }
+    Glyph(int c) : ch('.') { operator=(c); }
 
     Glyph as_upper() const { return Glyph(toupper(ch)); }
 
@@ -152,28 +150,26 @@ struct Note {
   int length;
 };
 
+struct tsf;
 struct Machine {
+  static const int AUDIO_SAMPLE_RATE = 44100;
+  static const int FRAMES_PER_SECOND = 60;
+  static const std::map<char, const char *> OPERATOR_NAMES;
+
+  std::array<int16_t, AUDIO_SAMPLE_RATE / FRAMES_PER_SECOND * 2> audio_samples;
+  size_t audio_sample_count = 0;
+
   std::vector<std::vector<Cell>> cells;
   std::vector<std::vector<const char *>> cell_descs;
   std::vector<Note> notes;
-  std::map<char, const char *> operator_names = {
-      {'A', "add"},       {'B', "subtract"}, {'C', "clock"},
-      {'D', "delay"},     {'E', "east"},     {'F', "if"},
-      {'G', "generator"}, {'H', "halt"},     {'I', "increment"},
-      {'J', "jumper"},    {'K', "konkat"},   {'L', "less"},
-      {'M', "multiply"},  {'N', "north"},    {'O', "read"},
-      {'P', "push"},      {'Q', "query"},    {'R', "random"},
-      {'S', "south"},     {'T', "track"},    {'U', "uclid"},
-      {'V', "variable"},  {'W', "west"},     {'X', "write"},
-      {'Y', "jymper"},    {'Z', "lerp"},     {'*', "bang"},
-      {'#', "comment"},   {':', "midi"},     {'%', "mono"},
-      {'!', "cc"},        {'?', "pb"},       {';', "udp"},
-      {'=', "osc"},       {'$', "self"},
-  };
+
   tsf *sf = nullptr;
 
   std::map<Cell::Glyph, Cell::Glyph> variables;
 
+  int bpm = 120;
+
+  unsigned frames = 0;
   unsigned ticks = 0;
 
   Machine() { sf = nullptr; }
@@ -188,8 +184,7 @@ struct Machine {
 
   void init(int width, int height);
   void reset();
-  void tick();
-  void tick_cell(char effective_c, int x, int y, Cell *cell);
+  void run();
 
   int grid_w() const { return cells[0].size(); }
   int grid_h() const { return cells.size(); }
@@ -205,6 +200,10 @@ struct Machine {
   bool is_valid(int x, int y) const {
     return x >= 0 && y >= 0 && y < grid_h() && x < grid_w();
   }
+
+  /* "private" */
+  void tick();
+  void tick_cell(char effective_c, int x, int y, Cell *cell);
 
   void move_operation(int x, int y, int X, int Y) {
     auto cell = &cells[y][x];

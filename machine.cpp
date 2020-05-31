@@ -1,4 +1,3 @@
-#define TSF_IMPLEMENTATION
 #include "machine.hpp"
 
 #include <algorithm>
@@ -7,6 +6,21 @@
 
 #include <ctype.h>
 #include <stdlib.h>
+
+#define TSF_IMPLEMENTATION
+#include "tsf.h"
+
+const std::map<char, const char *> Machine::OPERATOR_NAMES = {
+    {'A', "add"},       {'B', "subtract"}, {'C', "clock"},     {'D', "delay"},
+    {'E', "east"},      {'F', "if"},       {'G', "generator"}, {'H', "halt"},
+    {'I', "increment"}, {'J', "jumper"},   {'K', "konkat"},    {'L', "less"},
+    {'M', "multiply"},  {'N', "north"},    {'O', "read"},      {'P', "push"},
+    {'Q', "query"},     {'R', "random"},   {'S', "south"},     {'T', "track"},
+    {'U', "uclid"},     {'V', "variable"}, {'W', "west"},      {'X', "write"},
+    {'Y', "jymper"},    {'Z', "lerp"},     {'*', "bang"},      {'#', "comment"},
+    {':', "midi"},      {'%', "mono"},     {'!', "cc"},        {'?', "pb"},
+    {';', "udp"},       {'=', "osc"},      {'$', "self"},
+};
 
 // This is a minimal SoundFont with a single loopin saw-wave
 // sample/instrument/preset (484 bytes)
@@ -83,10 +97,12 @@ void Machine::init(int width, int height) {
 
   assert(sf);
 
-  for (int i = 0; i < 7; ++i)
-    tsf_channel_set_presetnumber(sf, i, 0, 0);
+  for (int i = 0; i < 7; ++i) {
+    // tsf_channel_set_presetnumber(sf, i, 0, 0);
+    tsf_channel_set_bank(sf, i, 0);
+  }
 
-  tsf_set_output(sf, TSF_STEREO_INTERLEAVED, 44100, 0);
+  tsf_set_output(sf, TSF_STEREO_INTERLEAVED, AUDIO_SAMPLE_RATE, 0);
 
   cells.resize(height);
   cell_descs.resize(height);
@@ -128,6 +144,17 @@ void Machine::reset() {
 
   cells.clear();
   init(w, h);
+
+  frames = 0;
+  ticks = 0;
+}
+
+void Machine::run() {
+  if (frames % (bpm / 15) == 0)
+    tick();
+
+  tsf_render_short(sf, audio_samples.data(), audio_samples.size() / 2);
+  frames++;
 }
 
 void Machine::tick() {
@@ -172,7 +199,7 @@ void Machine::tick() {
           (cell->flags & CF_IS_LOCKED && effective_c != '*'))
         continue;
 
-      cell_descs[y][x] = operator_names[effective_c];
+      cell_descs[y][x] = OPERATOR_NAMES.at(effective_c);
 
       tick_cell(effective_c, x, y, cell);
     }
@@ -578,9 +605,10 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
       Note n;
       n.key = note_octave0_to_key(notec, octave);
       n.channel = channel;
-      n.velocity = (velocity % 16) / 16.0f;
+      n.velocity = std::min(velocity / 16.0f, 16.0f);
       n.length = length; // length % g
       notes.push_back(n);
+      // printf(": %c + %i -> %i\n", notec, octave, n.key);
       tsf_channel_note_on(sf, n.channel, n.key, n.velocity);
     }
     break;
@@ -601,7 +629,7 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
       Note n;
       n.key = note_octave0_to_key(notec, octave);
       n.channel = channel;
-      n.velocity = (velocity % 16) / 16.0f;
+      n.velocity = std::min(velocity / 16.0f, 16.0f);
       n.length = length; // length % g
 
       notes.erase(std::remove_if(notes.begin(), notes.end(),
@@ -614,7 +642,7 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
                   notes.end());
 
       notes.push_back(n);
-      // printf("%c + %i -> %i\n", notec, octave, n.key);
+      // printf("%% %c + %i -> %i\n", notec, octave, n.key);
       tsf_channel_note_on(sf, n.channel, n.key, n.velocity);
       tsf_channel_set_pan(sf, n.channel, ticks % 2 == 0);
     }

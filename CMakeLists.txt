@@ -20,9 +20,17 @@ add_library(musigrid-core
   terminal.cpp
   terminal.hpp
   data/data.s
-  )
 
-set_source_files_properties(data/data.s PROPERTIES COMPILE_FLAGS "-I${CMAKE_SOURCE_DIR}/data")
+  tsf.h
+  stb_image.h
+)
+
+file(GLOB DATA_FILES ${CMAKE_SOURCE_DIR}/data/*.png)
+set_source_files_properties(data/data.s PROPERTIES
+  COMPILE_FLAGS "-I${CMAKE_SOURCE_DIR}/data"
+  OBJECT_DEPENDS ${DATA_FILES}
+)
+unset(DATA_FILES)
 
 if (MSVC)
 else()

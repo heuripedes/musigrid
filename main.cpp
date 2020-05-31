@@ -1,7 +1,10 @@
 #include "machine.hpp"
 
 #include <SDL.h>
+#include <SDL_audio.h>
+#include <SDL_hints.h>
 #include <assert.h>
+#include <chrono>
 #include <condition_variable>
 #include <cstdlib>
 #include <ctype.h>
@@ -9,6 +12,7 @@
 #include <memory>
 #include <mutex>
 #include <stdint.h>
+#include <thread>
 #include <vector>
 
 #include "terminal.hpp"
@@ -19,6 +23,90 @@
 struct Point {
   int x, y;
   Point() = default;
+};
+
+template <typename T> struct CircularBuffer {
+  using storage_type = std::vector<T>;
+  storage_type storage;
+  size_t used;
+  size_t ip;
+  size_t op;
+
+  CircularBuffer() = default;
+  CircularBuffer(const CircularBuffer &) = delete;
+
+  bool is_full() const { return used == storage.size(); }
+  bool is_empty() const { return used == 0; }
+
+  size_t unused() const { return storage.size() - used; }
+
+  void notify_copy(size_t amount) {
+    assert(used + amount <= storage.size());
+    ip = (ip + amount) % storage.size();
+    used += amount;
+  }
+
+  std::tuple<T *, size_t> first_unused_contiguous() {
+    size_t available = unused();
+    if (available == 0)
+      return {nullptr, 0};
+
+    if (ip + available > storage.size())
+      available = storage.size() - ip;
+
+    return {storage.data() + ip, available};
+  }
+
+  size_t write(const T *data, size_t size) {
+    size_t written = 0;
+
+    assert(!is_full());
+    for (written = 0; !is_full() && written < size; ++written) {
+      storage[ip++] = data[written];
+      ip %= storage.size();
+      used++;
+    }
+
+    assert(used <= storage.size());
+    return written;
+  }
+
+  size_t write_unsafe(const T *data, size_t size) {
+    size_t written = 0;
+
+    for (written = 0; written < size; ++written) {
+      storage[ip++] = data[written];
+      ip %= storage.size();
+      used++;
+    }
+
+    used = std::min(used + written, storage.size());
+    return written;
+  }
+
+  size_t write(T data) {
+    write(&data, 1);
+    return 1;
+  }
+
+  size_t write_unsafe(T data) {
+    write_unsafe(&data, 1);
+    return 1;
+  }
+
+  size_t read(T *data, size_t size) {
+    size_t bytes_read = 0;
+
+    assert(!is_empty());
+    for (bytes_read = 0; !is_empty() && bytes_read < size; ++bytes_read) {
+      data[bytes_read] = storage[op++];
+      op %= storage.size();
+      used--;
+    }
+
+    assert((ssize_t)used >= 0);
+    return bytes_read;
+  }
 };
 
 #define ALPHABET "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ*#:%!?;=$."
@@ -97,23 +185,48 @@ Terminal term;
 
 struct {
   std::mutex mut;
-  std::condition_variable read_cv;
+  std::condition_variable read_cv, write_cv;
+  CircularBuffer<uint8_t> buffer;
   int notes = 0;
   bool quit = false;
 } audio;
 
-static void audio_callback(void *userdata, Uint8 *stream, int len) {
-  std::unique_lock<std::mutex> lk(audio.mut);
+static void audio_callback(void *, uint8_t *data, int len) {
+  size_t size = len;
 
-  audio.read_cv.wait(lk, [&]() {
-    return audio.quit || tsf_active_voice_count(machine.sf) > 0;
-  });
+  std::unique_lock<std::mutex> lk(audio.mut);
+  audio.read_cv.wait(lk,
+                     [&]() { return audio.quit || audio.buffer.used >= size; });
 
   if (audio.quit)
-    memset(stream, 0, len);
-  else {
-    int sample_count = (len / (2 * sizeof(int16_t))); // 2 output channels
-    tsf_render_short(machine.sf, (int16_t *)stream, sample_count, 0);
+    goto zero_buffer;
+
+  if (!audio.buffer.is_empty()) {
+    size_t read = audio.buffer.read(data, size);
+    size -= read;
+    data += read;
+  }
+
+  if (size)
+    fprintf(stderr, "buffer underrun: %zu unused bytes\n", size);
+
+zero_buffer:
+  lk.unlock();
+  audio.write_cv.notify_one();
+  std::fill(data, data + size, 0);
+}
+
+static void audio_write(uint8_t *data, size_t size) {
+
+  while (size) {
+    std::unique_lock<std::mutex> lk(audio.mut);
+    audio.write_cv.wait(lk, [&]() { return !audio.buffer.is_full(); });
+
+    size_t written = audio.buffer.write(data, size);
+    data += written;
+    size -= written;
+
+    audio.read_cv.notify_one();
   }
 }
 
@@ -206,40 +319,33 @@ int main(int, char *[]) {
 
   SDL_Window *window;
   SDL_Renderer *renderer;
+
+  SDL_SetHint(SDL_HINT_RENDER_VSYNC, "1");
   SDL_CreateWindowAndRenderer(640, 480, 0, &window, &renderer);
 
   SDL_Texture *texture =
       SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
                         SDL_TEXTUREACCESS_STREAMING, 640, 480);
 
-  SDL_AudioSpec spec;
-  spec.channels = 2;
-  spec.freq = 44100;
-  spec.format = AUDIO_S16;
-  spec.samples = 256;
-  spec.callback = audio_callback;
-
-  audio_dev = SDL_OpenAudioDevice(NULL, false, &spec, NULL, 0);
-  SDL_PauseAudioDevice(audio_dev, 0);
-
   init();
 
+  SDL_AudioSpec spec;
+  spec.channels = 2;
+  spec.freq = Machine::AUDIO_SAMPLE_RATE;
+  spec.format = AUDIO_S16;
+  spec.samples = machine.audio_samples.size() / 2;
+  spec.callback = audio_callback;
+
+  audio_dev = SDL_OpenAudioDevice(NULL, false, &spec, &spec, 0);
+  SDL_PauseAudioDevice(audio_dev, 0);
+
+  audio.buffer.storage.resize(spec.size);
+
   bool running = true;
-  bool first_frame = true;
 
-  float secs_then = SDL_GetTicks() / 1000.0f;
-  float secs_acc = 0;
-
-  unsigned frames = 0;
-
-  unsigned speed = 2;
+  int bpm = 120;
 
   while (running) {
-    float secs_now = SDL_GetTicks() / 1000.0f;
-    float delta = secs_now - secs_then;
-    secs_then = secs_now;
-    secs_acc += delta;
-
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
       switch (ev.type) {
@@ -306,28 +412,17 @@ int main(int, char *[]) {
       }
     }
 
-    if (!first_frame) {
-      term.clear();
-    }
-    first_frame = false;
+    term.clear();
 
-    unsigned bpm = speed * 60;
+    static int frames = 0;
+    frames++;
 
-    bool is_tick = frames % (speed * 4) == 0;
-    bool is_beat = secs_acc > (60 / (float)bpm);
+    machine.run();
 
-    if (is_beat)
-      secs_acc -= (60 / (float)bpm);
+    audio_write((uint8_t *)machine.audio_samples.data(),
+                machine.audio_samples.size() * sizeof(int16_t));
 
-    if (is_tick) {
-      std::unique_lock<std::mutex> lk(audio.mut);
-      machine.tick();
-
-      lk.unlock();
-      audio.read_cv.notify_one();
-    }
-
-    draw(bpm, is_beat);
+    draw(machine.bpm, false);
 
     uint8_t *pixels = nullptr;
     int pitch;
@@ -339,7 +434,7 @@ int main(int, char *[]) {
     SDL_RenderCopy(renderer, texture, NULL, NULL);
     SDL_RenderPresent(renderer);
 
-    SDL_Delay(1000 / 30);
+    // std::this_thread::sleep_for(std::chrono::milliseconds(1000 / 60));
   }
 break_main_loop:
   running = false;
