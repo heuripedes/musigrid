@@ -2,8 +2,6 @@
 
 #include <SDL.h>
 #include <assert.h>
-#include <cctype>
-#include <cfloat>
 #include <condition_variable>
 #include <cstdlib>
 #include <ctype.h>

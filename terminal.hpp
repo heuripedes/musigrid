@@ -16,6 +16,10 @@ struct Terminal {
     char ch;
     uint8_t fg : 4;
     uint8_t bg : 4;
+
+    bool operator==(const Cell &o) const {
+      return ch == o.ch && fg == o.fg && bg == o.bg;
+    }
   };
 
   uint8_t fg, bg;
@@ -35,6 +39,7 @@ struct Terminal {
   int font_h;
 
   std::vector<Cell> buffer;
+  std::vector<Cell> back_buffer;
 
   void configure(int w, int h);
   void set_font(std::string name);

@@ -51,6 +51,7 @@ void Terminal::configure(int w, int h) {
   colors[7] = Color{0xfb, 0xb5, 0x45, 0xff}; // yellow
 
   buffer.resize(rows * cols);
+  back_buffer.resize(rows * cols);
 
   for (auto &c : buffer) {
     c.ch = 32 + rand() % (96 - 32);
@@ -113,6 +114,10 @@ void Terminal::draw_buffer(uint8_t *out, size_t out_pitch) {
       auto cell = buffer[cell_y * cols + cell_x];
       auto ch = cell.ch;
 
+      if (back_buffer[cell_y * cols + cell_x] == cell)
+        continue;
+
+
       if (ch < ' ' || ch > 127)
         ch = '?';
 
@@ -165,4 +170,6 @@ void Terminal::draw_buffer(uint8_t *out, size_t out_pitch) {
       }
     }
   }
+
+  back_buffer = buffer;
 }
