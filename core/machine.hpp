@@ -90,11 +90,13 @@ static int note_octave0_to_key(char note, int octave0) {
 }
 
 enum CellFlags {
-  CF_WAS_TICKED = 1 << 0, // we have already ticked this cell
-  CF_WAS_BANGED = 1 << 1, // something banged this cell
-  CF_WAS_READ = 1 << 2,
-  CF_WAS_WRITTEN = 1 << 3,
-  CF_IS_LOCKED = 1 << 4,
+  CF_IS_LITERAL = 1 << 0,
+  CF_WAS_TICKED = 1 << 1, // we have already ticked this cell
+  CF_USER_PLACED = 1 << 2,
+
+  CF_WAS_BANGED = 1 << 3, // something banged this cell
+  CF_WAS_READ = 1 << 4,
+  CF_WAS_WRITTEN = 1 << 5,
 };
 
 static inline bool is_operator_ch(char ch) {
@@ -215,6 +217,7 @@ struct Machine {
       cell->flags &= ~CF_WAS_TICKED;
     } else {
       cell->c = '*';
+      // cell->flags |= CF_IS_LITERAL;
     }
   }
 
@@ -226,7 +229,7 @@ struct Machine {
     if (cell) {
       cell_descs[y][x] = desc;
       cell->flags |= CF_WAS_READ;
-      cell->flags |= CF_IS_LOCKED;
+      cell->flags |= CF_IS_LITERAL;
       return cell->c;
     }
 
@@ -239,7 +242,7 @@ struct Machine {
     if (cell) {
       cell_descs[y][x] = desc;
       cell->flags |= CF_WAS_WRITTEN;
-      cell->flags |= CF_IS_LOCKED;
+      cell->flags |= CF_IS_LITERAL;
       cell->c = c;
     }
   }
@@ -268,7 +271,7 @@ struct Machine {
   void lock_cell(int x, int y) {
     auto cell = get_cell(x, y);
     if (cell)
-      cell->flags |= CF_IS_LOCKED;
+      cell->flags |= CF_IS_LITERAL;
   }
 
   void write_cell(int x, int y, char c, const char *desc) {

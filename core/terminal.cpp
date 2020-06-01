@@ -1,4 +1,6 @@
 #include "terminal.hpp"
+#include "util.hpp"
+
 #include <cstdlib>
 #include <stdint.h>
 
@@ -108,10 +110,11 @@ void Terminal::putcs(int x, int y, const char *str) {
 void Terminal::draw_buffer(uint8_t *out, size_t out_pitch) {
   const int out_cols = (out_pitch / sizeof(uint32_t)) / char_w;
   const int font_pitch = font_w * sizeof(uint32_t);
+  const auto max_cols = std::min(cols, out_cols);
 
   for (int cell_y = 0; cell_y < rows; ++cell_y) {
-    for (int cell_x = 0; cell_x < cols && cell_x < out_cols; ++cell_x) {
-      auto cell = buffer[cell_y * cols + cell_x];
+    for (int cell_x = 0; cell_x < max_cols; ++cell_x) {
+      const auto cell = buffer[cell_y * cols + cell_x];
       auto ch = cell.ch;
 
       if (back_buffer[cell_y * cols + cell_x] == cell)
@@ -147,10 +150,10 @@ void Terminal::draw_buffer(uint8_t *out, size_t out_pitch) {
         }
       } else {
         for (int cy = 0; cy < char_h; ++cy) {
-          const uint8_t *src =
-              font + (src_y + cy) * font_pitch + src_x * sizeof(uint32_t);
-          uint8_t *dst =
-              out + (dst_y + cy) * out_pitch + dst_x * sizeof(uint32_t);
+          // clang-format off
+          const uint8_t *src = font + (src_y + cy) * font_pitch + src_x * sizeof(uint32_t);
+          uint8_t *dst = out + (dst_y + cy) * out_pitch + dst_x * sizeof(uint32_t);
+          // clang-format on
 
           for (int cx = 0; cx < char_w; ++cx) {
             // drawing background is the most common case.

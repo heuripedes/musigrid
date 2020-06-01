@@ -1,4 +1,5 @@
 #include "machine.hpp"
+#include "util.hpp"
 
 #include <algorithm>
 #include <stdint.h>
@@ -110,7 +111,7 @@ void Machine::init(int width, int height) {
     row.resize(width);
   for (auto &row : cell_descs)
     row.resize(width);
-#if 0
+#if 1
   const char *data[] = {"..........................................",
                         ".#.MIDI.example.#.........................",
                         "..........................................",
@@ -157,46 +158,57 @@ void Machine::run() {
   frames++;
 }
 
+static void prepare_cells(Machine &machine) {
+  for (auto &rows : machine.cells) {
+    for (auto &cell : rows) {
+      if (UNLIKELY(isdigit(cell.c)))
+        cell.flags = CF_IS_LITERAL;
+      else
+        cell.flags = 0;
+    }
+  }
+  for (auto &rows : machine.cell_descs)
+    for (auto &desc : rows)
+      desc = "empty";
+}
+
+static void collect_old_notes(Machine &machine) {
+  for (auto &note : machine.notes) {
+    note.length--;
+
+    if (note.length < 1)
+      tsf_channel_note_off(machine.sf, note.channel, note.key);
+  }
+
+  auto dead_notes = std::remove_if(machine.notes.begin(), machine.notes.end(),
+                                   [](Note &note) { return note.length < 1; });
+
+  machine.notes.erase(dead_notes, machine.notes.end());
+}
+
 void Machine::tick() {
-  // clear flags
-  for (auto &row : cells)
-    for (auto &cell : row)
-      cell.flags = 0;
-
-  // silence notes
-  // tsf_note_off_all(sf);
-
-  notes.erase(std::remove_if(notes.begin(), notes.end(),
-                             [&](Note &note) {
-                               auto val = --note.length < 1;
-                               if (val)
-                                 tsf_channel_note_off(sf, note.channel,
-                                                      note.key);
-                               return val;
-                             }),
-              notes.end());
-
-  for (auto &row : cell_descs)
-    for (auto &cell_desc : row)
-      cell_desc = "empty";
+  prepare_cells(*this);
+  collect_old_notes(*this);
 
   for (int y = 0; y < grid_h(); ++y) {
     for (int x = 0; x < grid_w(); ++x) {
       auto cell = &cells[y][x];
 
-      if (cell->flags & CF_WAS_TICKED)
+      if (cell->c == '.' || cell->flags & CF_WAS_TICKED || isdigit(cell->c))
         continue;
 
-      Cell::Glyph effective_c =
-          (cell->flags & CF_WAS_BANGED) ? cell->c.as_upper() : cell->c;
+      auto tick_char = cell->c;
 
-      if (effective_c == '.' || islower(effective_c) || isdigit(effective_c) ||
-          (cell->flags & CF_IS_LOCKED && effective_c != '*'))
+      if (cell->flags & CF_WAS_BANGED)
+        tick_char = cell->c.as_upper();
+
+      if (islower(tick_char) ||
+          ((cell->flags & CF_IS_LITERAL) && tick_char != '*'))
         continue;
 
-      cell_descs[y][x] = OPERATOR_NAMES.at(effective_c);
+      cell_descs[y][x] = OPERATOR_NAMES.at(tick_char);
 
-      tick_cell(effective_c, x, y, cell);
+      tick_cell(tick_char, x, y, cell);
     }
   }
 
@@ -548,7 +560,7 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
     break;
   }
   case '*': {
-    if ((cell->flags & CF_IS_LOCKED) == 0)
+    if ((cell->flags & CF_IS_LITERAL) == 0)
       cell->c = '.';
 
     Cell *neigh;
@@ -578,8 +590,7 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
       auto cell = get_cell(i, y);
       if (!cell)
         continue;
-      cell->flags |= CF_WAS_TICKED;
-      cell->flags |= CF_IS_LOCKED;
+      cell->flags |= CF_IS_LITERAL;
       if (i > x && cell->c == '#')
         break;
     }

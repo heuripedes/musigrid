@@ -1,5 +1,6 @@
 #include "system.hpp"
 #include "machine.hpp"
+#include "util.hpp"
 
 const std::array<std::array<char, 10>, 5> System::InsertMenu::ITEMS = {
     {{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'},
@@ -72,9 +73,12 @@ void System::handle_input(const SimpleInput &new_input) {
 void System::draw() {
   term.clear();
 
+  const auto grid_h = machine.grid_h();
+  const auto grid_w = machine.grid_w();
+
   // draw grid
-  for (int y = 0; y < machine.grid_h(); ++y) {
-    for (int x = 0; x < machine.grid_w(); ++x) {
+  for (int y = 0; y < grid_h; ++y) {
+    for (int x = 0; x < grid_w; ++x) {
       if (x % 10 == 0 && y % 10 == 0)
         term.putc('+', x, y, 4, 0);
       else if (x % 2 == 0 && y % 2 == 0)
@@ -86,28 +90,41 @@ void System::draw() {
 
   auto cursor_cell = machine.get_cell(cursor.x, cursor.y);
 
-  for (int y = 0; y < machine.grid_h(); ++y) {
-    for (int x = 0; x < machine.grid_w(); ++x) {
+  for (int y = 0; y < grid_h; ++y) {
+    for (int x = 0; x < grid_w; ++x) {
       auto cell = machine.get_cell(x, y);
       char ch = cell->c;
 
       // highlighted cell
-      if (cursor_cell->c == ch && !(ch == '.' || ch == '#' ))
+      if (UNLIKELY(cursor_cell->c == ch && !(ch == '.' || ch == '#')))
         term.putc(ch, x, y, 7, 0);
       // read unlocked or read written
-      else if (cell->flags & CF_WAS_READ && ((cell->flags & CF_IS_LOCKED) == 0 || cell->flags & CF_WAS_WRITTEN))
+      else if (cell->flags & CF_WAS_READ &&
+               ((cell->flags & CF_IS_LITERAL) == 0 ||
+                cell->flags & CF_WAS_WRITTEN))
         term.putc(ch, x, y, 6, 0);
       // read locked
-      else if (cell->flags & CF_WAS_READ && cell->flags & CF_IS_LOCKED)
-        term.putc(ch,x, y, 1, 0);
+      else if (cell->flags & CF_WAS_READ && cell->flags & CF_IS_LITERAL)
+        term.putc(ch, x, y, 1, 0);
       // write locked
       else if (cell->flags & CF_WAS_WRITTEN)
         term.putc(ch, x, y, 0, 1);
+      // literals
+      else if (cell->flags & CF_IS_LITERAL) {
+        if (cell->flags & CF_WAS_BANGED && ch == '*')
+          term.putc(ch, x, y, 1, 0);
+        else
+          term.putc(ch, x, y, 4, 0);
+      }
       // operator, except for NSEW
-      else if (cell->flags & CF_WAS_TICKED && (ch != 'E' && ch != 'W' && ch != 'S' && ch != 'N' && ch != '.')) {
+      else if (cell->flags & CF_WAS_TICKED &&
+               (ch != 'E' && ch != 'W' && ch != 'S' && ch != 'N' &&
+                ch != '.')) {
         // blink these.
         if (cell->flags & CF_WAS_BANGED && (ch == '%' || ch == ':'))
           term.putc(' ', x, y, 0, 0);
+        else if (ch == '*')
+          term.putc(ch, x, y, 1, 0);
         else
           term.putc(ch, x, y, 0, 6);
       } else if (ch != '.')
@@ -147,9 +164,9 @@ void System::draw() {
   }
 
   term.reset_color();
-  term.print(0, machine.grid_h() + 0, " %10s   %02i,%02i %8uf",
+  term.print(0, grid_h + 0, " %10s   %02i,%02i %8uf",
              machine.cell_descs[cursor.y][cursor.x], cursor.x, cursor.y,
              machine.ticks);
-  term.print(0, machine.grid_h() + 1, " %10s   %2s %2s %8u%c", "", "", "",
-             machine.bpm, machine.ticks % 4 == 0 ? '*' : ' ');
+  term.print(0, grid_h + 1, " %10s   %2s %2s %8u%c", "", "", "", machine.bpm,
+             machine.ticks % 4 == 0 ? '*' : ' ');
 }
