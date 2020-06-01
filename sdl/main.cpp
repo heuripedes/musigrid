@@ -1,11 +1,12 @@
 #include "../core/machine.hpp"
-#include "../core/terminal.hpp"
 #include "../core/system.hpp"
+#include "../core/terminal.hpp"
 
 #include <SDL.h>
 #include <SDL_audio.h>
 #include <SDL_events.h>
 #include <SDL_hints.h>
+#include <SDL_keyboard.h>
 #include <SDL_scancode.h>
 #include <assert.h>
 #include <chrono>
@@ -18,8 +19,6 @@
 #include <stdint.h>
 #include <thread>
 #include <vector>
-
-
 
 #define GRID_W (640 / 8)
 #define GRID_H ((480 / 16) - 2)
@@ -119,7 +118,6 @@ static char cursor_char = sizeof(ALPHABET) - 1;
 
 SDL_AudioDeviceID audio_dev;
 
-
 struct {
   std::mutex mut;
   std::condition_variable read_cv, write_cv;
@@ -201,37 +199,32 @@ int main(int, char *[]) {
 
   while (running) {
     SDL_Event ev;
-    System::Input input;
+    System::SimpleInput input;
     while (SDL_PollEvent(&ev)) {
       switch (ev.type) {
-      case SDL_KEYDOWN:
-      case SDL_KEYUP: {
-        auto key = ev.key.keysym;
-        auto val = ev.type == SDL_KEYDOWN;
-        // clang-format off
-        switch (key.scancode) {
-          case SDL_SCANCODE_LEFT: input.left = val; break;
-          case SDL_SCANCODE_RIGHT: input.right = val; break;
-          case SDL_SCANCODE_DOWN: input.down = val; break;
-          case SDL_SCANCODE_UP: input.up = val; break;
-          case SDL_SCANCODE_INSERT: input.ins = val; break;
-          case SDL_SCANCODE_DELETE: input.del = val; break;
-          case SDL_SCANCODE_PAGEUP: input.pgup = val; break;
-          case SDL_SCANCODE_PAGEDOWN: input.pgdown = val; break;
-          default: break;
-        }
-        // clang-format on
-        break;
-      }
       case SDL_QUIT:
         goto break_main_loop;
       }
     }
 
+    auto keys = SDL_GetKeyboardState(NULL);
+    input.left = keys[SDL_SCANCODE_LEFT];
+    input.right = keys[SDL_SCANCODE_RIGHT];
+    input.up = keys[SDL_SCANCODE_UP];
+    input.down = keys[SDL_SCANCODE_DOWN];
+    input.ins = keys[SDL_SCANCODE_INSERT];
+    input.del = keys[SDL_SCANCODE_DELETE];
+    input.pgup = keys[SDL_SCANCODE_PAGEUP];
+    input.pgdown = keys[SDL_SCANCODE_PAGEDOWN];
+    input.enter = keys[SDL_SCANCODE_RETURN];
+    input.backspace = keys[SDL_SCANCODE_BACKSPACE];
+
     system.handle_input(input);
+
     system.machine.run();
 
-    audio_write((uint8_t*)system.machine.audio_samples.data(), system.machine.audio_samples.size() * sizeof(int16_t));
+    audio_write((uint8_t *)system.machine.audio_samples.data(),
+                system.machine.audio_samples.size() * sizeof(int16_t));
 
     system.draw();
 

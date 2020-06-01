@@ -23,10 +23,23 @@ void System::set_size(int width, int height) {
   machine.init(cols, rows - 2);
 }
 
-void System::handle_input(Input input) {
-  auto pressed = input.get_pressed(old_input);
+void System::handle_input(const SimpleInput &new_input) {
+  // auto pressed = input.get_pressed(old_input);
   // auto released = old_input.get_pressed(input);
-  old_input = input;
+  Input &input = old_input;
+
+  input.left = new_input.left;
+  input.right = new_input.right;
+  input.down = new_input.down;
+  input.up = new_input.up;
+  input.del = new_input.del;
+  input.ins = new_input.ins;
+  input.pgup = new_input.pgup;
+  input.pgdown = new_input.pgdown;
+  input.enter = new_input.enter;
+  input.backspace = new_input.backspace;
+
+  auto &pressed = input;
 
   if (insert_menu.is_open) {
     insert_menu.move_cursor(input.right - input.left, input.down - input.up);

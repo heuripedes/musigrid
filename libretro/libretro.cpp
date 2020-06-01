@@ -95,7 +95,7 @@ RETRO_API void retro_reset(void) {}
  * In this case, the video callback can take a NULL argument for data.
  */
 RETRO_API void retro_run(void) {
-  System::Input input = {false};
+  System::SimpleInput input;
 
   poll_cb();
 
@@ -113,6 +113,7 @@ RETRO_API void retro_run(void) {
   // clang-format on
 
   musigrid->handle_input(input);
+
   musigrid->machine.run();
 
   audio_cb(musigrid->machine.audio_samples.data(),
