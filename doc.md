@@ -1,3 +1,27 @@
+# Orca reverse engineering and other stuff.
+
+## Rendering
+
+* default color is dark gray fg on black bg
+
+
+* leaving the cursor over a cell will higlight similar cells with orange fg black bg, except for `.` and `#`.
+
+* locked cells have dark gray fg
+* locked read cells have white fg and black bg
+* locked written cells have white bg and white fg
+* unlocked read cells have blue fg black bg
+* unlocked operators have blue bg and black fg
+* `:`/`%` blinks when banged
+* banged lowercases don't get highlithed. their inputs/outputs go from a dark gray to a less-dark gray.
+
+* `*` bangs even when held/locked
+* `*` only bangs up and left cells
+
+
+
+
+
 Some tutorials:
 https://www.youtube.com/watch?v=ktcWOLeWP-g
 

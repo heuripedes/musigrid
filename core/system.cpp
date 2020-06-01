@@ -1,4 +1,5 @@
 #include "system.hpp"
+#include "machine.hpp"
 
 const std::array<std::array<char, 10>, 5> System::InsertMenu::ITEMS = {
     {{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'},
@@ -75,9 +76,9 @@ void System::draw() {
   for (int y = 0; y < machine.grid_h(); ++y) {
     for (int x = 0; x < machine.grid_w(); ++x) {
       if (x % 10 == 0 && y % 10 == 0)
-        term.putc('+', x, y, 5, 0);
+        term.putc('+', x, y, 4, 0);
       else if (x % 2 == 0 && y % 2 == 0)
-        term.putc('.', x, y, 5, 0);
+        term.putc('.', x, y, 4, 0);
       else
         term.putc(' ', x, y, 1, 0);
     }
@@ -90,19 +91,27 @@ void System::draw() {
       auto cell = machine.get_cell(x, y);
       char ch = cell->c;
 
-      if (cursor_cell->c == cell->c && cell->c != '.') {
+      // highlighted cell
+      if (cursor_cell->c == ch && !(ch == '.' || ch == '#' ))
         term.putc(ch, x, y, 7, 0);
-        continue;
-      }
-
-      if (cell->flags & CF_WAS_TICKED)
-        term.putc(ch, x, y, 0, 6);
-      else if (cell->flags & CF_WAS_READ)
-        term.putc(ch, x, y, (cell->flags & CF_IS_LOCKED) ? 1 : 6, 0);
+      // read unlocked or read written
+      else if (cell->flags & CF_WAS_READ && ((cell->flags & CF_IS_LOCKED) == 0 || cell->flags & CF_WAS_WRITTEN))
+        term.putc(ch, x, y, 6, 0);
+      // read locked
+      else if (cell->flags & CF_WAS_READ && cell->flags & CF_IS_LOCKED)
+        term.putc(ch,x, y, 1, 0);
+      // write locked
       else if (cell->flags & CF_WAS_WRITTEN)
         term.putc(ch, x, y, 0, 1);
-      else if (ch != '.' || cell->flags & CF_IS_LOCKED)
-        term.putc(ch, x, y, (cell->flags & CF_WAS_READ) ? 1 : 3, 0);
+      // operator, except for NSEW
+      else if (cell->flags & CF_WAS_TICKED && (ch != 'E' && ch != 'W' && ch != 'S' && ch != 'N' && ch != '.')) {
+        // blink these.
+        if (cell->flags & CF_WAS_BANGED && (ch == '%' || ch == ':'))
+          term.putc(' ', x, y, 0, 0);
+        else
+          term.putc(ch, x, y, 0, 6);
+      } else if (ch != '.')
+        term.putc(ch, x, y, 4, 0);
     }
   }
 
