@@ -159,12 +159,9 @@ void Machine::run() {
 
 void Machine::tick() {
   // clear flags
-  for (int y = 0; y < grid_h(); ++y) {
-    for (int x = 0; x < grid_w(); ++x) {
-      auto cell = &cells[y][x];
-      cell->flags = 0;
-    }
-  }
+  for (auto &row : cells)
+    for (auto &cell : row)
+      cell.flags = 0;
 
   // silence notes
   // tsf_note_off_all(sf);
@@ -179,11 +176,9 @@ void Machine::tick() {
                              }),
               notes.end());
 
-  for (int y = 0; y < grid_h(); ++y) {
-    for (int x = 0; x < grid_w(); ++x) {
-      cell_descs[y][x] = "empty";
-    }
-  }
+  for (auto &row : cell_descs)
+    for (auto &cell_desc : row)
+      cell_desc = "empty";
 
   for (int y = 0; y < grid_h(); ++y) {
     for (int x = 0; x < grid_w(); ++x) {
@@ -218,16 +213,16 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
   case 'A': {
     char ca = read_cell(x - 1, y, "A-a");
     char cb = read_locked(x + 1, y, "A-b");
-    int a = b36_to_int_fb(ca, 0);
-    int b = b36_to_int_fb(cb, 0);
+    int a = b36_to_int(ca, 0);
+    int b = b36_to_int(cb, 0);
     write_locked(x, y + 1, int_to_b36(a + b, isupper(cb)), "A-output");
     break;
   }
   case 'B': {
     char ca = read_cell(x - 1, y, "B-a");
     char cb = read_locked(x + 1, y, "B-b");
-    int a = b36_to_int_fb(ca, 0);
-    int b = b36_to_int_fb(cb, 0);
+    int a = b36_to_int(ca, 0);
+    int b = b36_to_int(cb, 0);
 
     if (b > a)
       write_locked(x, y + 1, int_to_b36(b - a, isupper(cb)), "B-output");
@@ -239,8 +234,8 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
     char ratec = read_cell(x - 1, y, "C-rate");
     char modc = read_locked(x + 1, y, "C-mod");
 
-    int rate = b36_to_int_fb(ratec, 1);
-    int mod = b36_to_int_fb(modc, 10);
+    int rate = b36_to_int(ratec, 1);
+    int mod = b36_to_int(modc, 10);
 
     if (rate < 1)
       rate = 1;
@@ -249,7 +244,7 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
       write_locked(x, y + 1, '0', "C-output");
     else {
       char resc = peek_cell(x, y + 1);
-      int res = b36_to_int_fb(resc, 0);
+      int res = b36_to_int(resc, 0);
 
       if (ticks % rate == 0)
         res = (res + 1) % mod;
@@ -262,8 +257,8 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
     char ratec = read_cell(x - 1, y, "D-rate");
     char modc = read_locked(x + 1, y, "D-mod");
 
-    int rate = b36_to_int_fb(ratec, 1);
-    int mod = b36_to_int_fb(modc, 8);
+    int rate = b36_to_int(ratec, 1);
+    int mod = b36_to_int(modc, 8);
 
     if (rate < 1)
       rate = 1;
@@ -286,9 +281,9 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
     char cy = read_cell(x - 2, y, "G-y");
     char clen = read_cell(x - 1, y, "G-len");
 
-    int x_ = b36_to_int_fb(cx, 0);
-    int y_ = b36_to_int_fb(cy, 0);
-    int len = b36_to_int_fb(clen, 1);
+    int x_ = b36_to_int(cx, 0);
+    int y_ = b36_to_int(cy, 0);
+    int len = b36_to_int(clen, 1);
 
     if (len < 1)
       len = 1;
@@ -325,14 +320,14 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
     char stepc = read_cell(x - 1, y, "I-step");
     char modc = read_locked(x + 1, y, "I-mod");
 
-    int step = stepc == '.' ? 1 : b36_to_int(stepc);
-    int mod = modc == '.' ? 10 : b36_to_int(modc);
+    int step = b36_to_int(stepc, 1);
+    int mod = b36_to_int(modc, 10);
 
     if (mod < 1)
       mod = 10;
 
     char resc = peek_cell(x, y + 1);
-    int res = resc == '.' ? 0 : b36_to_int(resc);
+    int res = b36_to_int(resc, 0);
 
     res = (res + step) % mod;
 
@@ -345,7 +340,7 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
   }
   case 'K': {
     char clen = read_cell(x - 1, y, "K-len");
-    int len = clen == '.' ? 1 : b36_to_int(clen);
+    int len = b36_to_int(clen, 1);
 
     if (len < 1)
       len = 1;
@@ -390,8 +385,8 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
   case 'M': {
     char ca = read_cell(x - 1, y, "M-a");
     char cb = read_locked(x + 1, y, "M-b");
-    int a = b36_to_int_fb(ca, 0);
-    int b = b36_to_int_fb(cb, 0);
+    int a = b36_to_int(ca, 0);
+    int b = b36_to_int(cb, 0);
     write_locked(x, y + 1, int_to_b36(a * b, isupper(cb)), "M-output");
     break;
   }
@@ -403,8 +398,8 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
     char cx = read_cell(x - 2, y, "O-x");
     char cy = read_cell(x - 1, y, "O-y");
 
-    int x_ = cx == '.' ? 0 : b36_to_int(cx);
-    int y_ = cy == '.' ? 0 : b36_to_int(cy);
+    int x_ = b36_to_int(cx, 0);
+    int y_ = b36_to_int(cy, 0);
 
     write_locked(x, y + 1, read_locked(x + 1 + x_, y + y_, "O-read"),
                  "O-output");
@@ -415,8 +410,8 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
     char clen = read_cell(x - 1, y, "P-len");
     char cread = read_locked(x + 1, y, "P-read");
 
-    int key = ckey == '.' ? 0 : b36_to_int(ckey);
-    int len = clen == '.' ? 0 : b36_to_int(clen);
+    int key = b36_to_int(ckey, 0);
+    int len = b36_to_int(clen, 0);
 
     if (len < 1)
       len = 1;
@@ -434,9 +429,9 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
     char cy = read_cell(x - 2, y, "Q-y");
     char clen = read_cell(x - 1, y, "Q-len");
 
-    int x_ = cx == '.' ? 0 : b36_to_int(cx);
-    int y_ = cy == '.' ? 0 : b36_to_int(cy);
-    int len = clen == '.' ? 1 : b36_to_int(clen);
+    int x_ = b36_to_int(cx, 0);
+    int y_ = b36_to_int(cy, 0);
+    int len = b36_to_int(clen, 1);
 
     if (len < 1)
       len = 1;
@@ -469,8 +464,8 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
     char cmin = read_cell(x - 1, y, "R-min");
     char cmax = read_locked(x + 1, y, "R-max");
 
-    int min_ = b36_to_int_fb(cmin, 0);
-    int max_ = b36_to_int_fb(cmax, 35);
+    int min_ = b36_to_int(cmin, 0);
+    int max_ = b36_to_int(cmax, 35);
 
     int res = min_ + (random() / (float)RAND_MAX) * (max_ - min_ + 1);
     write_locked(x, y + 1, int_to_b36(res, isupper(cmax)), "R-output");
@@ -484,8 +479,8 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
     char ckey = read_cell(x - 2, y, "T-key");
     char clen = read_cell(x - 1, y, "T-len");
 
-    int key = b36_to_int_fb(ckey, 0);
-    int len = b36_to_int_fb(clen, 0);
+    int key = b36_to_int(ckey, 0);
+    int len = b36_to_int(clen, 0);
 
     if (len < 1)
       len = 1;
@@ -519,8 +514,8 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
     char cx = read_cell(x - 2, y, "X-x");
     char cy = read_cell(x - 1, y, "X-y");
 
-    int x_ = b36_to_int_fb(cx, 0);
-    int y_ = b36_to_int_fb(cy, 0);
+    int x_ = b36_to_int(cx, 0);
+    int y_ = b36_to_int(cy, 0);
 
     write_locked(x + x_, y + y_ + 1, read_locked(x + 1, y, "X-read"),
                  "X-output");
@@ -534,11 +529,11 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
     char ratec = read_cell(x - 1, y, "Z-rate");
     char targetc = read_locked(x + 1, y, "Z-target");
 
-    int rate = ratec == '.' ? 1 : b36_to_int(ratec);
-    int target = targetc == '.' ? 0 : b36_to_int(targetc);
+    int rate = b36_to_int(ratec, 1);
+    int target = b36_to_int(targetc, 0);
 
     char resc = peek_cell(x, y + 1);
-    int res = resc == '.' ? 0 : b36_to_int(resc);
+    int res = b36_to_int(resc, 0);
 
     if (res > target) {
       res = res - rate;
@@ -596,10 +591,10 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
     char velocityc = read_locked(x + 4, y, ":-velocity");
     char lengthc = read_locked(x + 5, y, ":-length");
 
-    int channel = channelc == '.' ? 0 : b36_to_int(channelc);
-    int octave = octavec == '.' ? 0 : b36_to_int(octavec);
-    int velocity = velocityc == '.' ? 15 : b36_to_int(velocityc);
-    int length = lengthc == '.' ? 1 : b36_to_int(lengthc);
+    int channel = b36_to_int(channelc, 0);
+    int octave = b36_to_int(octavec, 0);
+    int velocity = b36_to_int(velocityc, 15);
+    int length = b36_to_int(lengthc, 1);
 
     if (cell->flags & CF_WAS_BANGED) {
       Note n;
@@ -620,10 +615,10 @@ void Machine::tick_cell(char effective_c, int x, int y, Cell *cell) {
     char velocityc = read_locked(x + 4, y, "%-velocity");
     char lengthc = read_locked(x + 5, y, "%-length");
 
-    int channel = channelc == '.' ? 0 : b36_to_int(channelc);
-    int octave = octavec == '.' ? 0 : b36_to_int(octavec);
-    int velocity = velocityc == '.' ? 15 : b36_to_int(velocityc);
-    int length = lengthc == '.' ? 1 : b36_to_int(lengthc);
+    int channel = b36_to_int(channelc, 0);
+    int octave = b36_to_int(octavec, 0);
+    int velocity = b36_to_int(velocityc, 15);
+    int length = b36_to_int(lengthc, 1);
 
     if (cell->flags & CF_WAS_BANGED) {
       Note n;

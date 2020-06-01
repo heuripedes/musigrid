@@ -22,7 +22,7 @@ static inline char int_to_b36(int v, bool upper) {
   return "0123456789abcdefghijklmnopqrstuvwxyz"[v % 36];
 }
 
-static inline int b36_to_int(char ch) {
+static inline int b36_to_int_raw(char ch) {
   if (ch >= '0' && ch <= '9')
     return ch - '0';
 
@@ -35,7 +35,7 @@ static inline int b36_to_int(char ch) {
   return -1;
 }
 
-static inline int b36_to_int_fb(char ch, int fallback) {
+static inline int b36_to_int(char ch, int fallback) {
   if (ch >= '0' && ch <= '9')
     return ch - '0';
 
@@ -62,11 +62,10 @@ static int note_octave0_to_key(char note, int octave0) {
 
   note = toupper(note);
 
-  if (note < 'A' || note > 'Z')
+  if (!isalpha(note))
     return -1;
 
-  // wrap
-  // this is probably wrong. orca's README says:
+  // Orca's README says:
   // "The midi operator interprets any letter above the chromatic scale as a
   // transpose value, for instance 3H, is equivalent to 4A."
   // also H -> A, I -> B
@@ -79,7 +78,9 @@ static int note_octave0_to_key(char note, int octave0) {
   if (note > 'G')
     note -= 'G';
 
-  int octave = octave0 + 2; // midi starts at -2
+  // MIDI's first note is C-2, but Orca can't handle n < 0 so
+  // we skip the firs two octaves and start at C0.
+  int octave = octave0 + 2;
 
   int out = midi_notes[note - 'A'];
   out += octave * 12;
@@ -138,7 +139,7 @@ struct Cell {
   unsigned char flags;
 
   int to_int(int fallback) const {
-    return is_b36(c) ? b36_to_int(c) : fallback;
+    return is_b36(c) ? b36_to_int_raw(c) : fallback;
   }
   void from_int(int v, bool upper) { c = int_to_b36(v, upper); }
 };

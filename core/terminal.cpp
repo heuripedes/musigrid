@@ -117,7 +117,6 @@ void Terminal::draw_buffer(uint8_t *out, size_t out_pitch) {
       if (back_buffer[cell_y * cols + cell_x] == cell)
         continue;
 
-
       if (ch < ' ' || ch > 127)
         ch = '?';
 
@@ -138,10 +137,11 @@ void Terminal::draw_buffer(uint8_t *out, size_t out_pitch) {
       // fast path for empty space
       if (src_x == 0 && src_y == 0) {
         for (int cy = 0; cy < char_h; ++cy) {
+          // clang-format off
           const uint8_t bg_color[] = {bg.b, bg.g, bg.r, 255};
-          uint32_t pixel = *(uint32_t*)bg_color;
-          uint32_t *dst = (uint32_t*)(
-              out + (dst_y + cy) * out_pitch + dst_x * sizeof(uint32_t));
+          uint32_t pixel = *(uint32_t *)bg_color;
+          uint32_t *dst = (uint32_t *)(out + (dst_y + cy) * out_pitch + dst_x * sizeof(uint32_t));
+          // clang-format on
 
           std::fill(dst, dst + char_w, pixel);
         }
