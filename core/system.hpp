@@ -2,8 +2,10 @@
 
 #include "machine.hpp"
 #include "terminal.hpp"
+#include "util.hpp"
 #include <array>
 #include <memory>
+#include <string.h>
 
 struct System {
   static constexpr const std::array<char, 46> CURSOR_CHARS = {
@@ -86,6 +88,73 @@ struct System {
     RepeatableKey enter, backspace;
   };
 
+  struct OptionsMenu {
+    const System *system = nullptr;
+    std::string selected;
+    bool is_open = false;
+    int cursor = 0;
+    enum { OPT_RESUME, OPT_NEXT_FONT, OPT_NEXT_SOUND_FONT, MAX_OPTS };
+    const std::array<std::string, MAX_OPTS> items = {
+        std::string("Resume"), std::string("Next font"),
+        std::string("Next sound font")};
+
+    OptionsMenu() {}
+    OptionsMenu(const System *sys) : system(sys){};
+    void open() {
+      is_open = true;
+      cursor = 0;
+    }
+
+    int accept() {
+      is_open = false;
+      return cursor;
+    }
+
+    void move_cursor(int dy) {
+      cursor += dy;
+      if (cursor < 0)
+        cursor = items.size() - 1;
+      else if (cursor >= items.size())
+        cursor = 0;
+    }
+
+    void draw(Terminal &term) {
+
+      int max_w = strlen("OPTIONS");
+
+      for (auto &i : items)
+        max_w = std::max(max_w, (int)i.length());
+
+      term.bg = 7;
+      term.fg = 0;
+
+      term.putc('+', 0, 0, 0, 7);
+      term.print(1, 0, "[%-*s]", max_w, "OPTIONS");
+      term.putc('+', max_w + 3, 0, 0, 7);
+
+      // term.print(0, 0, "+ OPTIONS --------+");
+      for (int i = 0; i < items.size(); ++i) {
+        term.putc('|', 0, i + 1, 0, 7);
+
+        if (i == cursor) {
+          term.bg = 6;
+          term.fg = 0;
+        } else
+          term.reset_color();
+
+        term.print(1, i + 1, " %-*s ", max_w, items[i].c_str());
+
+        term.putc('|', max_w + 3, i + 1, 0, 7);
+      }
+
+      term.bg = 7;
+      term.fg = 0;
+      term.print(0, items.size() + 1, "+%.*s+", max_w + 2,
+                 "---------------------------------");
+      term.reset_color();
+    }
+  };
+
   struct InsertMenu {
     static const std::array<std::array<char, 10>, 5> ITEMS;
 
@@ -148,6 +217,33 @@ struct System {
       if (cursor.y < 0)
         cursor.y = items_rows() - 1;
     }
+
+    void draw(Terminal &term) {
+      int draw_x = pos.x;
+      int draw_y = pos.y;
+
+      term.fg = 6;
+      term.bg = 7;
+      term.print(draw_x, draw_y++, "INS -");
+
+      term.reset_color();
+
+      for (int y = 0; y < items_rows(); ++y) {
+        for (int x = 0; x < items_cols(); ++x) {
+          char c = ucase ? toupper(ITEMS[y][x]) : tolower(ITEMS[y][x]);
+
+          if (x == cursor.x && y == cursor.y) {
+            term.fg = 7;
+            term.bg = 0;
+          } else {
+            term.fg = 1;
+            term.bg = 3;
+          }
+
+          term.putc(c, draw_x + x, draw_y + y);
+        }
+      }
+    }
   };
 
   Machine machine;
@@ -160,7 +256,16 @@ struct System {
 
   InsertMenu insert_menu{this};
 
-  System() = default;
+  enum {
+    UI_OPT_RESUME,
+    UI_OPT_FONT,
+    UI_OPT_SOUNDFONT
+  };
+  
+  PopupList options_menu{"OPTIONS", {"Resume", "Font...", "Sound font..."}};
+  PopupList font_menu;
+
+  System();
 
   void set_size(int width, int height);
   void handle_input(const SimpleInput &input);

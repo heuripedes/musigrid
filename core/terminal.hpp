@@ -2,8 +2,8 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <vector>
 #include <string>
+#include <vector>
 
 struct Color {
   uint8_t r, g, b, a;
@@ -40,6 +40,8 @@ struct Terminal {
 
   std::vector<Cell> buffer;
   std::vector<Cell> back_buffer;
+
+  Terminal() { set_font("unscii16"); }
 
   void configure(int w, int h);
   void set_font(std::string name);

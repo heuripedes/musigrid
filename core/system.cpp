@@ -9,11 +9,11 @@ const std::array<std::array<char, 10>, 5> System::InsertMenu::ITEMS = {
      {'U', 'V', 'W', 'X', 'Y', 'Z', '*', '#', ':', '%'},
      {'!', '?', ';', '=', '$', '.', '.', '.', '.', '.'}}};
 
+System::System() {}
+
 void System::set_size(int width, int height) {
   video_size.x = width;
   video_size.y = height;
-
-  term.set_font("unscii16");
 
   auto rows = height / term.char_h;
   auto cols = width / term.char_w;
@@ -22,12 +22,13 @@ void System::set_size(int width, int height) {
   term.fg = 1;
   term.bg = 0;
 
-  machine.init(cols, rows - 2);
+  if (machine.grid_h() == 0)
+    machine.init(cols, rows - 2);
+  else
+    machine.set_size(cols, rows - 2);
 }
 
 void System::handle_input(const SimpleInput &new_input) {
-  // auto pressed = input.get_pressed(old_input);
-  // auto released = old_input.get_pressed(input);
   Input &input = old_input;
 
   input.left = new_input.left;
@@ -52,6 +53,37 @@ void System::handle_input(const SimpleInput &new_input) {
       machine.new_cell(cursor.x, cursor.y, insert_menu.accept());
     else if (pressed.pgdown || pressed.pgup)
       insert_menu.toggle_case();
+  } else if (options_menu.is_open) {
+    options_menu.move_cursor(input.down - input.up);
+
+    if (input.enter) {
+      auto option = options_menu.accept_int();
+
+      if (option == UI_OPT_RESUME) {
+      } else if (option == UI_OPT_FONT) {
+        font_menu = PopupList("Select font", {
+                                                 "unscii16",
+                                                 "unscii8_alt",
+                                                 "unscii8_fantasy",
+                                                 "unscii8_mcr",
+                                                 "unscii8",
+                                                 "unscii8_tall",
+                                                 "unscii8_thin",
+                                             });
+        font_menu.open(options_menu.x + 1, 1 + options_menu.selected);
+      } else if (option == UI_OPT_SOUNDFONT) {
+      }
+    } else if (input.backspace || input.del)
+      options_menu.cancel();
+  } else if (font_menu.is_open) {
+    font_menu.move_cursor(input.down - input.up);
+
+    if (input.enter || input.ins) {
+      auto font = font_menu.accept_str();
+      term.set_font(font);
+      set_size(video_size.x, video_size.y);
+    } else if (input.backspace || input.del)
+      font_menu.cancel();
 
   } else {
     Vec2i p = cursor;
@@ -65,6 +97,8 @@ void System::handle_input(const SimpleInput &new_input) {
       auto cur_char = machine.get_cell(cursor.x, cursor.y)->c;
       insert_menu.open(cursor.x, cursor.y,
                        cur_char == '.' ? Cell::Glyph('O') : cur_char);
+    } else if (pressed.enter) {
+      options_menu.open(0, 0);
     } else if (pressed.del)
       machine.new_cell(cursor.x, cursor.y, '.');
   }
@@ -132,35 +166,15 @@ void System::draw() {
     }
   }
 
-  if (!insert_menu.is_open) {
+  if (insert_menu.is_open) {
+    insert_menu.draw(term);
+  } else if (options_menu.is_open) {
+    options_menu.draw(term);
+  } else if (font_menu.is_open) {
+    font_menu.draw(term);
+  } else {
     term.putc(cursor_cell->c == '.' ? '@' : (char)cursor_cell->c, cursor.x,
               cursor.y, 0, 7);
-  } else {
-    int draw_x = insert_menu.pos.x;
-    int draw_y = insert_menu.pos.y;
-
-    term.fg = 6;
-    term.bg = 7;
-    term.print(draw_x, draw_y++, "INS -");
-
-    term.reset_color();
-
-    for (int y = 0; y < insert_menu.items_rows(); ++y) {
-      for (int x = 0; x < insert_menu.items_cols(); ++x) {
-        char c = insert_menu.ucase ? toupper(insert_menu.ITEMS[y][x])
-                                   : tolower(insert_menu.ITEMS[y][x]);
-
-        if (x == insert_menu.cursor.x && y == insert_menu.cursor.y) {
-          term.fg = 7;
-          term.bg = 0;
-        } else {
-          term.fg = 1;
-          term.bg = 3;
-        }
-
-        term.putc(c, draw_x + x, draw_y + y);
-      }
-    }
   }
 
   term.reset_color();

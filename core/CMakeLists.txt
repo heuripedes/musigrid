@@ -6,6 +6,8 @@ add_library(musigrid_core OBJECT
   system.hpp
   terminal.cpp
   terminal.hpp
+  util.hpp
+  util.cpp
   tsf.h
   stb_image.h
 )

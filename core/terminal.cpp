@@ -73,7 +73,16 @@ void Terminal::set_font(std::string name) {
     char_w = CHAR_W;                                                           \
     char_h = CHAR_H;                                                           \
   }
-  if_font(unscii8, 8, 8) else if_font(unscii16, 8, 16) else { abort(); }
+  // clang-format off
+  if_font(unscii8, 8, 8)
+  else if_font(unscii8_alt, 8, 8)
+  else if_font(unscii8_fantasy, 8, 8)
+  else if_font(unscii8_mcr, 8, 8)
+  else if_font(unscii8_tall, 8, 16)
+  else if_font(unscii8_thin, 8, 8)
+  else if_font(unscii16, 8, 16)
+  else { abort(); }
+  // clang-format on
 #undef if_font
 }
 
@@ -117,8 +126,8 @@ void Terminal::draw_buffer(uint8_t *out, size_t out_pitch) {
       const auto cell = buffer[cell_y * cols + cell_x];
       auto ch = cell.ch;
 
-      if (back_buffer[cell_y * cols + cell_x] == cell)
-        continue;
+      // if (back_buffer[cell_y * cols + cell_x] == cell)
+        // continue;
 
       if (ch < ' ' || ch > 127)
         ch = '?';

@@ -186,6 +186,7 @@ struct Machine {
   std::string to_string() const;
 
   void init(int width, int height);
+  void set_size(int width, int height);
   void reset();
   void run();
 

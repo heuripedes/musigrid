@@ -105,13 +105,9 @@ void Machine::init(int width, int height) {
 
   tsf_set_output(sf, TSF_STEREO_INTERLEAVED, AUDIO_SAMPLE_RATE, 0);
 
-  cells.resize(height);
-  cell_descs.resize(height);
-  for (auto &row : cells)
-    row.resize(width);
-  for (auto &row : cell_descs)
-    row.resize(width);
-#if 1
+  set_size(width, height);
+
+#if 0
   const char *data[] = {"..........................................",
                         ".#.MIDI.example.#.........................",
                         "..........................................",
@@ -137,6 +133,15 @@ void Machine::init(int width, int height) {
     }
   }
 #endif
+}
+
+void Machine::set_size(int width, int height) {
+  cells.resize(height);
+  cell_descs.resize(height);
+  for (auto &row : cells)
+    row.resize(width);
+  for (auto &row : cell_descs)
+    row.resize(width);
 }
 
 void Machine::reset() {
